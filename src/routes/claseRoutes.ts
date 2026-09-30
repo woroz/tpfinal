@@ -1,17 +1,24 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { claseService } from '../services/claseService.js';
 import { AppError } from '../utils/error.js';
+import { auth } from '../middlewares/authMiddleware.js';
 
 const router = Router();
 
 router.post(
     '/crear',
+    auth(['profesor']),
     async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const idProfesor = req.body.id_profesor;
-            if (!idProfesor) {
-                throw new AppError('Se requiere el ID del profesor.', 400);
+            if (!req.user) {
+                throw new AppError('Usuario no autenticado', 401);
             }
+
+            const idProfesor = req.user.id_rol;
+            if (!idProfesor) {
+                throw new AppError('El usuario no tiene un perfil de profesor', 403);
+            }
+            
             const { 
                 id_materia, 
                 titulo, 
