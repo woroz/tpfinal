@@ -9,7 +9,13 @@ const router = Router()
 
 router.post('/register', validate(registerSchema), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const data = await authService.register(req.body.email, req.body.password, req.body.nombre, req.body.rol)
+        const data = await authService.register(
+            req.body.email,
+            req.body.password,
+            req.body.nombre,
+            req.body.rol,
+            req.body.direccion
+        )
         res.status(201).json({ message: "usuario registrado", userId: data.id_usuario })
     } catch (error) {
         next(error)
