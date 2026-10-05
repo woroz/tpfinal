@@ -1,5 +1,7 @@
-import { prisma } from '../utils/prisma.js'; 
+import { prisma } from '../utils/prisma.js';
 import { AppError } from '../utils/error.js';
+import { ESTADO_CLASE, ESTADO_INSCRIPCION } from '../utils/estados.js';
+import { claseOcupaHorario } from '../utils/ocupacion.js';
 
 export const claseService = {
   async crearClase(idProfesor: string, datos: {
@@ -16,6 +18,10 @@ export const claseService = {
     const inicio = new Date(datos.fecha_hora_inicio);
     const fin = new Date(datos.fecha_hora_fin);
 
+    if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
+        throw new AppError("Las fechas ingresadas no son validas.", 400);
+    }
+
     if (inicio >= fin) {
         throw new AppError("La fecha y hora de inicio debe ser anterior a la de finalización.", 400);
     }
@@ -27,7 +33,7 @@ export const claseService = {
     const claseSuperpuesta = await prisma.clase.findFirst({
       where: {
         id_profesor: idProfesor,
-        estado: { not: "cancelada" }, 
+        ...claseOcupaHorario(new Date()),
         fecha_hora_inicio: { lt: fin },
         fecha_hora_fin: { gt: inicio }
       }
@@ -49,8 +55,43 @@ export const claseService = {
         precio: datos.precio || 0,
         tipo: datos.tipo,     
         origen: datos.origen, 
-        estado: "disponible"
+        estado: ESTADO_CLASE.disponible
       }
     });
+  },
+
+  async listarProgramadas(idProfesor: string, historial: boolean) {
+    const clases = await prisma.clase.findMany({
+      where: {
+        id_profesor: idProfesor,
+        estado: { in: [ESTADO_CLASE.confirmada, ESTADO_CLASE.disponible] },
+        ...(historial ? {} : { fecha_hora_fin: { gte: new Date() } })
+      },
+      include: {
+        materia: true,
+        inscripciones: {
+          where: { estado: ESTADO_INSCRIPCION.confirmada },
+          include: { alumno: { include: { usuario: { select: { nombre: true } } } } }
+        }
+      },
+      orderBy: { fecha_hora_inicio: historial ? 'desc' : 'asc' }
+    });
+
+    return clases.map((clase: any) => ({
+      id_clase: clase.id_clase,
+      titulo: clase.titulo,
+      tema: clase.tema,
+      materia: clase.materia.nombreMateria,
+      inicio: clase.fecha_hora_inicio,
+      fin: clase.fecha_hora_fin,
+      precio: clase.precio ?? 0,
+      tipo: clase.tipo,
+      estado: clase.estado,
+      cupo_maximo: clase.cupo_maximo,
+      alumnos: clase.inscripciones.map((inscripcion: any) => ({
+        id_alumno: inscripcion.id_alumno,
+        nombre: inscripcion.alumno.usuario.nombre
+      }))
+    }));
   }
 };

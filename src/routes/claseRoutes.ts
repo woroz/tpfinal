@@ -2,6 +2,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { claseService } from '../services/claseService.js';
 import { AppError } from '../utils/error.js';
 import { auth } from '../middlewares/authMiddleware.js';
+import { historialQuerySchema } from '../schemas/reservaSchema.js';
+import { obtenerIdRol, validar } from '../utils/validar.js';
 
 const router = Router();
 
@@ -55,5 +57,11 @@ router.post(
         }
     }
 );
+
+router.get('/programadas', auth(['profesor']), async (req: Request, res: Response) => {
+    const { historial } = validar(historialQuerySchema, req.query);
+    const clases = await claseService.listarProgramadas(obtenerIdRol(req), historial === 'true');
+    res.status(200).json({ clases });
+});
 
 export default router;

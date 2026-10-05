@@ -36,6 +36,7 @@ model Usuario {
   reportesHechos       Reporte[]        @relation("ReportesHechos")
   reportesRecibidos    Reporte[]        @relation("ReportesRecibidos")
   reclamosGestionados  reclamo[]
+  notificaciones Notificacion[]
 }
 
 model Profesor {
@@ -62,10 +63,13 @@ model Disponibilidad {
   id_profesor       String
   profesor          Profesor @relation(fields: [id_profesor], references: [id_profesor])
   diaSemana         Int
-  horaInicio        DateTime
-  horaFin           DateTime
-  estado            Boolean
+  minutoInicio      Int
+  minutoFin         Int
+  estado            Boolean  @default(true)
+
+  @@index([id_profesor, diaSemana])
 }
+
 
 model Alumno {
   id_alumno       String  @id @default(uuid())
@@ -150,6 +154,9 @@ model Clase {
   materiales        materialDidactico[]
   tareas            tarea[]
   calificaciones    calificacion[]
+  notificaciones    Notificacion[]
+
+  @@index([id_profesor, fecha_hora_inicio])
 }
 
 model Inscripcion {
@@ -158,12 +165,17 @@ model Inscripcion {
   clase          Clase    @relation(fields: [id_clase], references: [id_clase])
   id_alumno      String
   alumno         Alumno   @relation(fields: [id_alumno], references: [id_alumno])
-  fecha_reserva  DateTime
+  fecha_reserva  DateTime @default(now())
   estado         String
-  asistio        Boolean
+  asistio        Boolean  @default(false)
+  expiraEn       DateTime?
 
   pago pago?
+
+  @@index([id_alumno])
+  @@index([id_clase])
 }
+
 
 model Resena {
   id_resena   String   @id @default(uuid())
@@ -185,10 +197,26 @@ model pago {
   id_inscripcion String      @unique
   inscripcion    Inscripcion @relation(fields: [id_inscripcion], references: [id_inscripcion])
   monto          Int
-  medioPago      String
+  medioPago      String      @default("mercadopago")
   estado         String
+  id_preferencia String?
   id_mercadopago String?
-  fecha_pago     DateTime
+  fecha_pago     DateTime?
+}
+
+model Notificacion {
+  id_notificacion String   @id @default(uuid())
+  id_usuario      String
+  usuario         Usuario  @relation(fields: [id_usuario], references: [id_usuario])
+  id_clase        String?
+  clase           Clase?   @relation(fields: [id_clase], references: [id_clase])
+  tipo            String
+  titulo          String
+  mensaje         String
+  leida           Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([id_usuario, leida])
 }
 
 model grabacion {
