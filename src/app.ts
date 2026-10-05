@@ -9,8 +9,24 @@ import { AppError } from './utils/error.js'
 
 const app = express()
 
+const allowedOrigins = new Set([
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  config.frontendUrl
+])
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true)
+    } else {
+      callback(new Error('Origen no permitido por CORS'))
+    }
+  },
+  credentials: true
+}))
+
 app.use(helmet())
-app.use(cors({ origin: config.frontendUrl, credentials: true }))
 app.use(express.json())
 app.use(cookieParser())
 app.use('/', routes)

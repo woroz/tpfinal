@@ -3,31 +3,22 @@ import { config } from '../config/index.js'
 import { loginSchema, registerSchema } from '../schemas/authSchema.js'
 import { authService } from '../services/authService.js'
 import { AppError } from '../utils/error.js'
+import { validate } from '../middlewares/validateMiddleware.js'
+
 const router = Router()
 
-router.post('/register', async (req: Request, res: Response, next: NextFunction) => {
-    const result = registerSchema.safeParse(req.body)
-    if (!result.success) {
-        return next(new AppError(result.error.issues[0].message, 400))
-    }
-    
+router.post('/register', validate(registerSchema), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const data = await authService.register(result.data.email, result.data.password, result.data.nombre, result.data.rol)
-
+        const data = await authService.register(req.body.email, req.body.password, req.body.nombre, req.body.rol)
         res.status(201).json({ message: "usuario registrado", userId: data.id_usuario })
     } catch (error) {
         next(error)
     }
 })
 
-router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
-    const result = loginSchema.safeParse(req.body)
-    if (!result.success) {
-        return next(new AppError(result.error.issues[0].message, 400))
-    }
-
+router.post('/login', validate(loginSchema), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const {token, refreshToken} = await authService.login(result.data.email, result.data.password)
+        const {token, refreshToken} = await authService.login(req.body.email, req.body.password)
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: config.nodeEnv === 'production',

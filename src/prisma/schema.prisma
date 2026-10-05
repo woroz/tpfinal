@@ -45,8 +45,8 @@ model Profesor {
   usuario        Usuario @relation(fields: [id_usuario], references: [id_usuario])
   tarifa         Int?
   descripcion    String?
-  longitus_prof  Float?
-  latitu_prof    Float?
+  longitud_prof  Float?
+  latitud_prof    Float?
 
   disponibilidad     Disponibilidad[]
   clases             Clase[]
@@ -100,7 +100,7 @@ model Perfil {
 
 model areaConocimiento {
   id_area    String @id @default(uuid())
-  nombreArea String
+  nombreArea String @unique
 
   materias materia[]
 }
@@ -109,7 +109,7 @@ model materia {
   id_materia           String            @id @default(uuid())
   id_area_conocimiento String
   areaConocimiento     areaConocimiento  @relation(fields: [id_area_conocimiento], references: [id_area])
-  nombreMateria        String
+  nombreMateria        String            @unique
 
   clases            Clase[]
   profesores        profesorMateria[]

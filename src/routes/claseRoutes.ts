@@ -7,10 +7,7 @@ import { obtenerIdRol, validar } from '../utils/validar.js';
 
 const router = Router();
 
-router.post(
-    '/crear',
-    auth(['profesor']),
-    async (req: Request, res: Response, next: NextFunction) => {
+router.post('/crear', auth(['profesor']), async (req: Request, res: Response, next: NextFunction) => {
         try {
             if (!req.user) {
                 throw new AppError('Usuario no autenticado', 401);
