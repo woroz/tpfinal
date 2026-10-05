@@ -4,9 +4,19 @@ import { validate } from '../middlewares/validateMiddleware.js';
 import { buscarProfesorSchema } from '../schemas/profesorSchema.js';
 import { asociarMateriaSchema } from '../schemas/materiaSchema.js';
 import { profesorService } from '../services/profesorService.js';
+import { horarioService } from '../services/horarioService.js'
+import { horariosQuerySchema, idParamSchema } from '../schemas/reservaSchema.js'
+import { validar } from '../utils/validar.js'
 import { AppError } from '../utils/error.js';
 
 const router = Router();
+
+router.get('/:id/horarios', auth(), async (req: Request, res: Response) => {
+    const { id } = validar(idParamSchema, req.params)
+    const { desde, hasta } = validar(horariosQuerySchema, req.query)
+    const agenda = await horarioService.obtenerAgenda(id, desde, hasta)
+    res.status(200).json(agenda)
+})
 
 router.get('/buscar', auth(['alumno']), validate(buscarProfesorSchema, 'query'), async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -137,6 +147,5 @@ router.get('/:id/disponibilidad', auth(['alumno', 'profesor', 'admin']), async (
     }
   }
 )
-
 
 export default router
