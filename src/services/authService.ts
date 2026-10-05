@@ -6,8 +6,44 @@ import { Role } from '../generated/prisma/client.js'
 import { JwtUser } from '../types/jwt.js'
 import { AppError } from '../utils/error.js'
 
+async function geocodificarDireccion(direccion: string): Promise<{ latitud: number; longitud: number }> {
+    const params = new URLSearchParams({
+        q: direccion,
+        format: 'jsonv2',
+        limit: '1',
+        countrycodes: 'ar',
+        'accept-language': 'es'
+    })
+
+    let response: Response
+    try {
+        response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+            headers: {
+                'User-Agent': 'MentorAr/1.0 (registro de usuarios)'
+            }
+        })
+    } catch {
+        throw new AppError('No se pudo consultar la ubicacion. Intenta nuevamente.', 503)
+    }
+
+    if (!response.ok) {
+        throw new AppError('No se pudo consultar la ubicacion. Intenta nuevamente.', 503)
+    }
+
+    const resultados = await response.json() as Array<{ lat?: string; lon?: string }>
+    const resultado = resultados[0]
+    const latitud = Number(resultado?.lat)
+    const longitud = Number(resultado?.lon)
+
+    if (!Number.isFinite(latitud) || !Number.isFinite(longitud)) {
+        throw new AppError('No encontramos esa direccion. Inclui calle, numero, ciudad y provincia.', 400)
+    }
+
+    return { latitud, longitud }
+}
+
 export const authService = {
-    register: async (email: string, password: string, nombre: string, rol: Role) => {
+    register: async (email: string, password: string, nombre: string, rol: Role, direccion: string) => {
     if (rol === "admin") {
         throw new AppError('No se puede registrar un usuario con rol admin', 400)
     }
@@ -18,6 +54,7 @@ export const authService = {
     }
 
     const hash = await hashPassword(password)
+    const ubicacion = await geocodificarDireccion(direccion)
 
     const user = await prisma.usuario.create({
         data: {
@@ -25,8 +62,22 @@ export const authService = {
             contrasena: hash,
             nombre,
             rol,
-            ...(rol === 'profesor' && { profesor: { create: {} } }),
-            ...(rol === 'alumno'   && { alumno:   { create: {} } }),
+            ...(rol === 'profesor' && {
+                profesor: {
+                    create: {
+                        latitud_prof: ubicacion.latitud,
+                        longitud_prof: ubicacion.longitud
+                    }
+                }
+            }),
+            ...(rol === 'alumno' && {
+                alumno: {
+                    create: {
+                        latitud_alum: ubicacion.latitud,
+                        longitud_alum: ubicacion.longitud
+                    }
+                }
+            }),
             perfil: { create: { visibilidad: 'publico' } }
         },
         include: {
