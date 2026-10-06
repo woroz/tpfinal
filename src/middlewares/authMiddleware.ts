@@ -6,6 +6,14 @@ import { JwtUser } from '../types/jwt.js';
 
 type UserRole = 'profesor' | 'alumno' | 'admin';
 
+declare global {
+    namespace Express {
+        interface Request {
+            user?: JwtUser;
+        }
+    }
+}
+
 export const auth = (roles: UserRole[] = []) => {
     return (req: Request, res: Response, next: NextFunction) => {
         const authHeader = req.headers.authorization
