@@ -6,7 +6,7 @@ import routes from './routes/routes.js'
 import { config } from './config/index.js'
 import { errorMiddleware } from './middlewares/errorMiddleware.js'
 import { AppError } from './utils/error.js'
-
+import pagoRoutes from './routes/pagoRoutes.js'
 const app = express()
 
 const allowedOrigins = new Set([
@@ -25,10 +25,10 @@ app.use(cors({
   },
   credentials: true
 }))
-
 app.use(helmet())
 app.use(express.json())
 app.use(cookieParser())
+app.use('/pagos', pagoRoutes)
 app.use('/', routes)
 
 app.get('/prueba', (req, res) => {

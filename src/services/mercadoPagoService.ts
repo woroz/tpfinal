@@ -15,7 +15,9 @@ function obtenerCliente(): MercadoPagoConfig {
 function urlDeRetorno(idInscripcion: string, plataforma: Plataforma): URL {
     const base = plataforma === 'app' && config.appReturnUrl
         ? config.appReturnUrl
-        : `${config.frontendUrl}/pago/resultado`
+        : config.publicApiUrl
+            ? `${config.publicApiUrl}/pagos/retorno`
+            : `${config.frontendUrl}/pago/resultado`
     const url = new URL(base)
     url.searchParams.set('inscripcion', idInscripcion)
     return url

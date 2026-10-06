@@ -109,10 +109,11 @@ router.get('/:id/clases', auth(['profesor', 'alumno', 'admin']), async (req: Req
         if (typeof req.params.id !== 'string') {
             throw new AppError('ID de profesor no proporcionado', 400)
         }
-        
+
+        const esDueno = req.user?.rol === 'admin' || req.user?.id_rol === req.params.id
         const clases = await profesorService.obtenerClases(req.params.id, {
-            estado: estado as string
-        })
+            estado: typeof estado === 'string' ? estado : undefined
+        }, !esDueno)
 
         res.status(200).json({ message: 'Clases encontradas', clases })
     } catch (error) {

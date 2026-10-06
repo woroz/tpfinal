@@ -1,6 +1,8 @@
 import { prisma } from '../utils/prisma.js';
 import { AppError } from '../utils/error.js';
 import { Prisma } from '../generated/prisma/client.js'
+import { ESTADO_CLASE, ESTADO_INSCRIPCION } from '../utils/estados.js'
+import { minutosAHora } from '../utils/fechas.js'
 
 export const profesorService = {
     buscarProfesores: async (filtros: {
@@ -112,16 +114,23 @@ export const profesorService = {
                         materia: { include: { areaConocimiento: true } }
                     }
                 },
-                disponibilidad: true,
+                disponibilidad: {
+                    where: { estado: true },
+                    orderBy: [{ diaSemana: 'asc' }, { minutoInicio: 'asc' }]
+                },
                 resenas: {
                     include: {
                         alumno: { include: { usuario: { select: { nombre: true } } } }
-                    }
+                    },
+                    orderBy: { createdAt: 'desc' }
                 },
                 clases: {
-                where: { estado: 'disponible' },
-                include: { materia: true},
-                orderBy: { fecha_hora_inicio: 'asc' }
+                    where: {
+                        estado: ESTADO_CLASE.disponible,
+                        fecha_hora_inicio: { gte: new Date() }
+                    },
+                    include: { materia: true },
+                    orderBy: { fecha_hora_inicio: 'asc' }
                 }
             }
         })
@@ -134,26 +143,47 @@ export const profesorService = {
 
         return {
             ...profesor,
+            disponibilidad: profesor.disponibilidad.map((franja) => ({
+                diaSemana: franja.diaSemana,
+                desde: minutosAHora(franja.minutoInicio),
+                hasta: minutosAHora(franja.minutoFin)
+            })),
             promedioResenas
         }
     },
 
-    obtenerClases: async (id_proofesor: string, filtros?: { estado: string}) => {
+    obtenerClases: async (id_proofesor: string, filtros?: { estado?: string }, soloPublicas = false) => {
+        const ahora = new Date()
         const clases = await prisma.clase.findMany({
-            where: {
-                id_profesor: id_proofesor,
-                ...(filtros?.estado && { estado: filtros.estado })
-            },
+            where: soloPublicas
+                ? {
+                    id_profesor: id_proofesor,
+                    estado: ESTADO_CLASE.disponible,
+                    origen: { not: 'reserva' },
+                    fecha_hora_inicio: { gte: ahora }
+                }
+                : {
+                    id_profesor: id_proofesor,
+                    ...(filtros?.estado && { estado: filtros.estado })
+                },
             include: {
                 materia: { include: { areaConocimiento: true } },
-                inscripciones: { select: { id_inscripcion: true } }
+                inscripciones: {
+                    where: {
+                        OR: [
+                            { estado: ESTADO_INSCRIPCION.confirmada },
+                            { estado: ESTADO_INSCRIPCION.pendientePago, expiraEn: { gt: ahora } }
+                        ]
+                    },
+                    select: { id_inscripcion: true }
+                }
             },
             orderBy: { fecha_hora_inicio: 'asc' }
         })
 
-        return clases.map(clase => ({
+        return clases.map(({ inscripciones, ...clase }) => ({
             ...clase,
-            cuposDisponibles: clase.cupo_maximo - clase.inscripciones.length
+            cuposDisponibles: Math.max(clase.cupo_maximo - inscripciones.length, 0)
         }))
     },
 
@@ -177,10 +207,14 @@ export const profesorService = {
             },
             orderBy: [
                 {diaSemana: 'asc'},
-                {horaInicio: 'asc'}
+                {minutoInicio: 'asc'}
             ]
         })
-        return disponibilidad
+        return disponibilidad.map((franja) => ({
+            diaSemana: franja.diaSemana,
+            desde: minutosAHora(franja.minutoInicio),
+            hasta: minutosAHora(franja.minutoFin)
+        }))
     },
 
     asociarMateria: async (id_profesor: string, id_materia: string) => {

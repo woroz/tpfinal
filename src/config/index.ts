@@ -14,6 +14,12 @@ function optionalEnv(name: string): string | undefined {
     return val ? val : undefined
 }
 
+function numberEnv(name: string, fallback: number): number {
+    const raw = process.env[name]
+    const val = raw ? Number(raw) : fallback
+    return Number.isFinite(val) && val > 0 ? val : fallback
+}
+
 export const config = {
     port: requireEnv('PORT'),
     nodeEnv: requireEnv('NODE_ENV'),
@@ -40,7 +46,7 @@ export const config = {
     reservas: {
         duracionMin: 60,
         anticipacionMin: 60,
-        retencionMin: 15,
+        retencionMin: numberEnv('RESERVA_RETENCION_MIN', 15),
         diasMaximos: 60,
         zonaOffsetMin: -180
     }
