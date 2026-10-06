@@ -15,10 +15,14 @@ process.on('unhandledRejection', (error: Error) => {
 try {
     await prisma.$queryRaw`SELECT 1`
     console.log('base de datos conectada')
-    app.listen(config.port, () => {
-        console.log(`Servidor escuchando en el puerto ${config.port}`)
-    })
 } catch (error) {
     console.error('Error al conectar la base de datos', { message: (error as Error).message })
     process.exit(1)
 }
+
+if (process.env.VERCEL !== '1') {
+    app.listen(config.port, () => {
+        console.log(`Servidor escuchando en el puerto ${config.port}`)
+    })
+}
+export default app
