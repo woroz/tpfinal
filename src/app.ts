@@ -7,8 +7,9 @@ import { config } from './config/index.js'
 import { errorMiddleware } from './middlewares/errorMiddleware.js'
 import { AppError } from './utils/error.js'
 import pagoRoutes from './routes/pagoRoutes.js'
-const app = express()
 
+const app = express()
+app.set('trust proxy', 1)
 const allowedOrigins = new Set([
   'http://localhost:5173',
   'http://127.0.0.1:5173',

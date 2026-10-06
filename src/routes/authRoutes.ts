@@ -7,6 +7,17 @@ import { validate } from '../middlewares/validateMiddleware.js'
 
 const router = Router()
 
+const isProd = config.nodeEnv === 'production'
+
+const cookieOptions = {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? ('none' as const) : ('lax' as const),
+    path: '/'
+}
+
+const REFRESH_MAX_AGE = 7 * 24 * 60 * 60 * 1000
+
 router.post('/register', validate(registerSchema), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const data = await authService.register(
@@ -24,13 +35,10 @@ router.post('/register', validate(registerSchema), async (req: Request, res: Res
 
 router.post('/login', validate(loginSchema), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const {token, refreshToken} = await authService.login(req.body.email, req.body.password)
+        const { token, refreshToken } = await authService.login(req.body.email, req.body.password)
         res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure: config.nodeEnv === 'production',
-            sameSite: 'strict',
-            path: '/',
-            maxAge: 7 * 24 * 60 * 60 * 1000
+            ...cookieOptions,
+            maxAge: REFRESH_MAX_AGE
         })
         res.status(200).json({ message: 'Bienvenido', token: token })
     } catch (error) {
@@ -39,13 +47,7 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response,
 })
 
 router.post('/logout', (req: Request, res: Response, next: NextFunction) => {
-    res.clearCookie('refreshToken', {
-        httpOnly: true,
-        secure: config.nodeEnv === 'production',
-        sameSite: 'strict',
-        path: '/'
-    })
-
+    res.clearCookie('refreshToken', cookieOptions)
     res.status(200).json({ message: 'sesion cerrada correctamente' })
 })
 
@@ -56,10 +58,8 @@ router.post('/refresh-token', async (req: Request, res: Response, next: NextFunc
     try {
         const { newAccessToken, newRefreshToken } = await authService.refreshToken(refreshToken)
         res.cookie('refreshToken', newRefreshToken, {
-            httpOnly: true,
-            secure: config.nodeEnv === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000
+            ...cookieOptions,
+            maxAge: REFRESH_MAX_AGE
         })
         res.status(200).json({ accessToken: newAccessToken })
     } catch (error) {
