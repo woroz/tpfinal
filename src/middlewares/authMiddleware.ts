@@ -1,8 +1,8 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/index.js';
 import { AppError } from '../utils/error.js';
-import { JwtUser } from '../types/jwt.js';
+import type { JwtUser } from '../types/jwt.js';
 
 type UserRole = 'profesor' | 'alumno' | 'admin';
 

@@ -1,6 +1,6 @@
 import { prisma } from '../utils/prisma.js';
 import { AppError } from '../utils/error.js';
-import { Role } from '../generated/prisma/client.js'
+import type { Role } from '../generated/prisma/client.js'
 
 export const perfilService = {
     actualizarPerfil: async (id_usuario: string, rol: Role, datos: {

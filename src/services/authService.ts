@@ -2,8 +2,8 @@ import { hashPassword,verifyPassword } from '../utils/hash.js'
 import jwt from 'jsonwebtoken'
 import { config } from '../config/index.js'
 import { prisma } from '../utils/prisma.js'
-import { Role } from '../generated/prisma/client.js'
-import { JwtUser } from '../types/jwt.js'
+import type { Role } from '../generated/prisma/client.js'
+import type { JwtUser } from '../types/jwt.js'
 import { AppError } from '../utils/error.js'
 
 async function geocodificarDireccion(direccion: string): Promise<{ latitud: number; longitud: number }> {
