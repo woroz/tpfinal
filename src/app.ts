@@ -25,10 +25,10 @@ app.use(cors({
   },
   credentials: true
 }))
-   app.use('/pagos', pagoRoutes)
 app.use(helmet())
 app.use(express.json())
 app.use(cookieParser())
+app.use('/pagos', pagoRoutes)
 app.use('/', routes)
 
 app.get('/prueba', (req, res) => {
