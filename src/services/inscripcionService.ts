@@ -48,7 +48,13 @@ function aDto(inscripcion: InscripcionDetalle) {
             nombre: inscripcion.clase.profesor.usuario.nombre
         },
         pago: inscripcion.pago
-            ? { estado: inscripcion.pago.estado, monto: inscripcion.pago.monto }
+            ? {
+                estado: inscripcion.pago.estado,
+                monto: inscripcion.pago.monto,
+                medio_pago: inscripcion.pago.medioPago,
+                fecha_pago: inscripcion.pago.fecha_pago,
+                id_operacion: inscripcion.pago.id_mercadopago
+            }
             : null
     }
 }
@@ -153,6 +159,31 @@ async function confirmarPagoAprobado(idInscripcion: string, idPagoMp: string): P
             })
         }
         await notificacionService.reservaNoDisponible(idInscripcion, reembolsado)
+    }
+}
+
+type PagoMp = Awaited<ReturnType<typeof mercadoPagoService.obtenerPago>>
+
+async function aplicarPagoMp(pagoMp: PagoMp): Promise<void> {
+    if (!pagoMp.referencia) return
+
+    const pago = await prisma.pago.findUnique({ where: { id_inscripcion: pagoMp.referencia } })
+    if (!pago) return
+
+    if (pagoMp.estado === 'approved') {
+        if (pagoMp.monto !== pago.monto) {
+            console.error('El monto del pago no coincide con la reserva', { idPagoMp: pagoMp.id, esperado: pago.monto, recibido: pagoMp.monto })
+            return
+        }
+        await confirmarPagoAprobado(pagoMp.referencia, pagoMp.id)
+        return
+    }
+
+    if (pagoMp.estado === 'rejected' || pagoMp.estado === 'cancelled') {
+        await prisma.pago.updateMany({
+            where: { id_inscripcion: pagoMp.referencia, estado: ESTADO_PAGO.pendiente },
+            data: { estado: ESTADO_PAGO.rechazado, id_mercadopago: pagoMp.id }
+        })
     }
 }
 
@@ -328,26 +359,63 @@ export const inscripcionService = {
 
     async procesarNotificacionPago(idPagoMp: string): Promise<void> {
         const pagoMp = await mercadoPagoService.obtenerPago(idPagoMp)
-        if (!pagoMp.referencia) return
+        await aplicarPagoMp(pagoMp)
+    },
 
-        const pago = await prisma.pago.findUnique({ where: { id_inscripcion: pagoMp.referencia } })
-        if (!pago) return
-
-        if (pagoMp.estado === 'approved') {
-            if (pagoMp.monto !== pago.monto) {
-                console.error('El monto del pago no coincide con la reserva', { idPagoMp, esperado: pago.monto, recibido: pagoMp.monto })
-                return
-            }
-            await confirmarPagoAprobado(pagoMp.referencia, pagoMp.id)
-            return
+    async verificarPago(idAlumno: string, idPagoMp: string) {
+        let pagoMp: PagoMp
+        try {
+            pagoMp = await mercadoPagoService.obtenerPago(idPagoMp)
+        } catch (error) {
+            console.error('No se pudo consultar el pago', { idPagoMp, message: (error as Error).message })
+            throw new AppError('No encontramos ese pago', 404)
         }
+        if (!pagoMp.referencia) throw new AppError('El pago no corresponde a ninguna reserva', 404)
 
-        if (pagoMp.estado === 'rejected' || pagoMp.estado === 'cancelled') {
-            await prisma.pago.updateMany({
-                where: { id_inscripcion: pagoMp.referencia, estado: ESTADO_PAGO.pendiente },
-                data: { estado: ESTADO_PAGO.rechazado, id_mercadopago: pagoMp.id }
-            })
-        }
+        const inscripcion = await prisma.inscripcion.findFirst({
+            where: { id_inscripcion: pagoMp.referencia, id_alumno: idAlumno },
+            select: { id_inscripcion: true }
+        })
+        if (!inscripcion) throw new AppError('El pago no corresponde a ninguna reserva', 404)
+
+        await aplicarPagoMp(pagoMp)
+        return obtenerDetalle(inscripcion.id_inscripcion)
+    },
+
+    async listarPagosDelAlumno(idAlumno: string) {
+        const pagos = await prisma.pago.findMany({
+            where: { inscripcion: { id_alumno: idAlumno } },
+            include: {
+                inscripcion: {
+                    include: {
+                        clase: {
+                            include: {
+                                materia: true,
+                                profesor: { include: { usuario: { select: { nombre: true } } } }
+                            }
+                        }
+                    }
+                }
+            },
+            orderBy: { inscripcion: { fecha_reserva: 'desc' } }
+        })
+
+        return pagos.map((pago) => ({
+            id_pago: pago.id_pago,
+            id_inscripcion: pago.id_inscripcion,
+            estado: pago.estado,
+            monto: pago.monto,
+            medio_pago: pago.medioPago,
+            fecha_pago: pago.fecha_pago,
+            id_operacion: pago.id_mercadopago,
+            clase: {
+                id_clase: pago.inscripcion.clase.id_clase,
+                titulo: pago.inscripcion.clase.titulo,
+                materia: pago.inscripcion.clase.materia.nombreMateria,
+                inicio: pago.inscripcion.clase.fecha_hora_inicio
+            },
+            profesor: { nombre: pago.inscripcion.clase.profesor.usuario.nombre }
+        }))
     },
 
     async obtener(idAlumno: string, idInscripcion: string) {

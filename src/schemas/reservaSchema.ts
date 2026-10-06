@@ -35,3 +35,7 @@ export const guardarDisponibilidadSchema = z.object({
         hasta: hora
     })).max(70, 'Hay demasiadas franjas horarias')
 })
+
+export const verificarPagoSchema = z.object({
+    payment_id: z.coerce.string().regex(/^\d{1,20}$/, 'El identificador de pago no es valido')
+})
