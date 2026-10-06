@@ -1,5 +1,4 @@
 import express from 'express'
-import './types/express.d.ts';
 import helmet from 'helmet'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
