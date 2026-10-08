@@ -4,6 +4,8 @@ import { AppError } from '../utils/error.js';
 import { auth } from '../middlewares/authMiddleware.js';
 import { historialQuerySchema } from '../schemas/reservaSchema.js';
 import { obtenerIdRol, validar } from '../utils/validar.js';
+import { buscarClaseSchema } from '../schemas/claseSchema.js';
+import { validate } from '../middlewares/validateMiddleware.js';
 
 const router = Router();
 
@@ -60,5 +62,15 @@ router.get('/programadas', auth(['profesor']), async (req: Request, res: Respons
     const clases = await claseService.listarProgramadas(obtenerIdRol(req), historial === 'true');
     res.status(200).json({ clases });
 });
+
+router.post('/buscar', auth(['alumno']), validate(buscarClaseSchema), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { consulta, latitud, longitud, radio } = req.body;
+        const clases = await claseService.buscarClases(consulta, latitud, longitud, radio);
+        res.status(200).json({ message: 'Clases encontradas', clases });
+    } catch (error) {
+        next(error);
+    }
+})
 
 export default router;
