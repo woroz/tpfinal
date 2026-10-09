@@ -2,16 +2,12 @@ import { prisma } from '../utils/prisma.js'
 import { hashPassword } from '../utils/hash.js'
  
 // Ubicacion base de los datos de prueba (por defecto: Neuquen capital).
-// Para usar la tuya: SEED_LAT=-34.6 SEED_LNG=-58.4 npx tsx src/prisma/seed.ts
+// Para usar otra: SEED_LAT=-34.6 SEED_LNG=-58.4 npm run seed
 const LAT = Number(process.env.SEED_LAT ?? -38.9516)
 const LNG = Number(process.env.SEED_LNG ?? -68.0591)
  
 const CONTRASENA = 'prueba123'
- 
-const FRANJAS = [
-    { minutoInicio: 540, minutoFin: 780 },   // 09:00 a 13:00
-    { minutoInicio: 900, minutoFin: 1080 }   // 15:00 a 18:00
-]
+const DIAS_SEMANA = [0, 1, 2, 3, 4, 5, 6]
  
 async function crearProfesor(datos: {
     email: string
@@ -53,15 +49,96 @@ async function crearProfesor(datos: {
         skipDuplicates: true
     })
  
-    // Lunes a viernes, dos franjas por dia. Se reemplaza lo anterior.
+    // Cada materia tiene un rango propio todos los días de la semana.
     await prisma.disponibilidad.deleteMany({ where: { id_profesor: profesor.id_profesor } })
     await prisma.disponibilidad.createMany({
-        data: [1, 2, 3, 4, 5].flatMap((diaSemana) =>
-            FRANJAS.map((franja) => ({ id_profesor: profesor.id_profesor, diaSemana, ...franja, estado: true }))
+        data: DIAS_SEMANA.flatMap((diaSemana) =>
+            datos.idsMaterias.map((id_materia, indice) => ({
+                id_profesor: profesor.id_profesor,
+                diaSemana,
+                minutoInicio: 540 + indice * 180,
+                minutoFin: 720 + indice * 180,
+                id_materia,
+                estado: true
+            }))
         )
     })
  
     return profesor
+}
+
+async function crearClaseFutura(idProfesor: string, idMateria: string, nombreMateria: string, precio: number) {
+    const titulo = `Clase abierta de ${nombreMateria} (demo)`
+    const existente = await prisma.clase.findFirst({
+        where: { id_profesor: idProfesor, titulo }
+    })
+    if (existente) return
+
+    const inicio = new Date()
+    inicio.setDate(inicio.getDate() + 2)
+    inicio.setHours(20, 0, 0, 0)
+    const fin = new Date(inicio.getTime() + 60 * 60 * 1000)
+
+    await prisma.clase.create({
+        data: {
+            id_profesor: idProfesor,
+            id_materia: idMateria,
+            titulo,
+            tema: `Introducción a ${nombreMateria}`,
+            contenido: `Clase de prueba para explorar la publicación y reserva de ${nombreMateria}.`,
+            fecha_hora_inicio: inicio,
+            fecha_hora_fin: fin,
+            cupo_maximo: 3,
+            precio,
+            tipo: 'grupal',
+            origen: 'profesor',
+            estado: 'disponible'
+        }
+    })
+}
+
+async function crearClaseConAlumno(idProfesor: string, idAlumno: string, idMateria: string) {
+    const titulo = 'Clase reservada para probar cambio de horario (demo)'
+    let clase = await prisma.clase.findFirst({
+        where: { id_profesor: idProfesor, titulo }
+    })
+
+    if (!clase) {
+        const inicio = new Date()
+        inicio.setDate(inicio.getDate() + 4)
+        inicio.setHours(19, 0, 0, 0)
+        const fin = new Date(inicio.getTime() + 60 * 60 * 1000)
+        clase = await prisma.clase.create({
+            data: {
+                id_profesor: idProfesor,
+                id_materia: idMateria,
+                titulo,
+                tema: 'Derivadas',
+                contenido: 'Clase confirmada de prueba para cambiar el horario y avisar al alumno.',
+                fecha_hora_inicio: inicio,
+                fecha_hora_fin: fin,
+                cupo_maximo: 1,
+                precio: 0,
+                tipo: 'individual',
+                origen: 'reserva',
+                estado: 'confirmada'
+            }
+        })
+    }
+
+    const inscripcionExistente = await prisma.inscripcion.findFirst({
+        where: { id_clase: clase.id_clase, id_alumno: idAlumno }
+    })
+    if (!inscripcionExistente) {
+        await prisma.inscripcion.create({
+            data: {
+                id_clase: clase.id_clase,
+                id_alumno: idAlumno,
+                estado: 'confirmada',
+                asistio: false
+            }
+        })
+    }
 }
  
 async function crearAlumno(email: string, nombre: string, contrasena: string) {
@@ -139,16 +216,19 @@ async function crearClaseDadaConResena(idProfesor: string, idAlumno: string, idM
 }
  
 async function main() {
-    const area = (await prisma.areaConocimiento.findFirst({ where: { nombreArea: 'Ciencias exactas' } }))
-        ?? (await prisma.areaConocimiento.create({ data: { nombreArea: 'Ciencias exactas' } }))
+    const area = await prisma.areaConocimiento.upsert({
+        where: { nombreArea: 'Ciencias exactas' },
+        update: {},
+        create: { nombreArea: 'Ciencias exactas' }
+    })
  
     const idsMaterias: string[] = []
     for (const nombreMateria of ['Matematica', 'Fisica', 'Quimica']) {
-        const existente = await prisma.materia.findFirst({
-            where: { nombreMateria, id_area_conocimiento: area.id_area }
+        const materia = await prisma.materia.upsert({
+            where: { nombreMateria },
+            update: {},
+            create: { nombreMateria, id_area_conocimiento: area.id_area }
         })
-        const materia = existente
-            ?? (await prisma.materia.create({ data: { nombreMateria, id_area_conocimiento: area.id_area } }))
         idsMaterias.push(materia.id_materia)
     }
  
@@ -166,7 +246,7 @@ async function main() {
         contrasena
     })
  
-    await crearProfesor({
+    const profesorGratis = await crearProfesor({
         email: 'profesorgratis@mentorar.test',
         nombre: 'Profesor Gratis',
         tarifa: 0,
@@ -177,18 +257,35 @@ async function main() {
         idsMaterias,
         contrasena
     })
+
+    await crearProfesor({
+        email: 'profesorsinmaterias@mentorar.test',
+        nombre: 'Profesor Sin Materias',
+        tarifa: 7000,
+        descripcion: 'Cuenta de prueba para comprobar el perfil antes de agregar materias.',
+        biografia: 'Agregá materias desde la opción Mis materias.',
+        desfaseLat: 0.002,
+        desfaseLng: -0.005,
+        idsMaterias: [],
+        contrasena
+    })
  
     const alumno = await crearAlumno('alumno@mentorar.test', 'Alumno Demo', contrasena)
  
     await crearClaseDadaConResena(profesor.id_profesor, alumno.id_alumno, idsMaterias[0], 8000)
+    await crearClaseFutura(profesor.id_profesor, idsMaterias[0], 'Matematica', 8000)
+    await crearClaseFutura(profesorGratis.id_profesor, idsMaterias[1], 'Fisica', 0)
+    await crearClaseConAlumno(profesor.id_profesor, alumno.id_alumno, idsMaterias[0])
  
     console.log('Datos de prueba cargados')
     console.log(`  Contrasena de todas las cuentas: ${CONTRASENA}`)
     console.log('  Alumno:             alumno@mentorar.test')
     console.log('  Profesor (8000):    profesor@mentorar.test')
     console.log('  Profesor (gratis):  profesorgratis@mentorar.test')
+    console.log('  Profesor sin materias: profesorsinmaterias@mentorar.test')
     console.log(`  Ubicacion base: ${LAT}, ${LNG}`)
     console.log(`  id_profesor demo: ${profesor.id_profesor}`)
+    console.log('  Horarios: Matemática 09:00-12:00, Física 12:00-15:00, Química 15:00-18:00; todos los días')
 }
  
 main()

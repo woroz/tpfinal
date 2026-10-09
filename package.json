@@ -8,7 +8,8 @@
     "start": "node dist/server.js",
     "build": "tsc && npm run copy:prisma",
     "copy:prisma": "copyfiles -u 1 \"src/generated/**/*\" dist",
-    "dev": "npm run build && nodemon dist/server.js"
+    "dev": "npm run build && nodemon dist/server.js",
+    "seed": "npm run build && node dist/prisma/seed.js"
   },
   "repository": {
     "type": "git",
@@ -26,6 +27,7 @@
     "@node-rs/argon2": "^2.2.1",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "@vercel/blob": "^2.8.1",
     "argon2": "^0.44.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
@@ -34,6 +36,7 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "mercadopago": "^3.6.1",
+    "multer": "^2.4.0",
     "nodemailer": "^10.0.14",
     "pg": "^8.23.0",
     "prisma": "^7.10.0",
@@ -45,6 +48,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.3.0",
     "@types/node": "^26.6.2",
     "@types/nodemailer": "^8.0.2",
     "@types/uuid": "^10.0.0",

@@ -62,6 +62,7 @@ model Disponibilidad {
   id_disponibilidad String   @id @default(uuid())
   id_profesor       String
   profesor          Profesor @relation(fields: [id_profesor], references: [id_profesor])
+  id_materia        String?
   diaSemana         Int
   minutoInicio      Int
   minutoFin         Int
@@ -96,6 +97,9 @@ model Perfil {
   biografia   String?
   avatarURL   String?
   visibilidad Visibilidad
+  pais        String?
+  provincia   String?
+  ciudad      String?
 }
 
 model areaConocimiento {
@@ -133,6 +137,9 @@ model Clase {
   materia            materia  @relation(fields: [id_materia], references: [id_materia])
   titulo             String
   tema               String
+  contenido          String?  @db.Text
+  materialUrl        String?
+  materialNombre     String?
   fecha_hora_inicio  DateTime
   fecha_hora_fin     DateTime
   cupo_maximo        Int

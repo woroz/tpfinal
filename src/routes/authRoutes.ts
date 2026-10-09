@@ -4,35 +4,30 @@ import { loginSchema, registerSchema } from '../schemas/authSchema.js'
 import { authService } from '../services/authService.js'
 import { AppError } from '../utils/error.js'
 import { validate } from '../middlewares/validateMiddleware.js'
-
+ 
 const router = Router()
-
+ 
 const isProd = config.nodeEnv === 'production'
-
+ 
 const cookieOptions = {
     httpOnly: true,
     secure: isProd,
     sameSite: isProd ? ('none' as const) : ('lax' as const),
     path: '/'
 }
-
+ 
 const REFRESH_MAX_AGE = 7 * 24 * 60 * 60 * 1000
-
+ 
 router.post('/register', validate(registerSchema), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const data = await authService.register(
-            req.body.email,
-            req.body.password,
-            req.body.nombre,
-            req.body.rol,
-            req.body.direccion
-        )
+        const { email, password, nombre, rol, direccion, pais, provincia, ciudad } = req.body
+        const data = await authService.register(email, password, nombre, rol, direccion, { pais, provincia, ciudad })
         res.status(201).json({ message: "usuario registrado", userId: data.id_usuario })
     } catch (error) {
         next(error)
     }
 })
-
+ 
 router.post('/login', validate(loginSchema), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { token, refreshToken } = await authService.login(req.body.email, req.body.password)
@@ -45,16 +40,16 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response,
         next(error)
     }
 })
-
+ 
 router.post('/logout', (req: Request, res: Response, next: NextFunction) => {
     res.clearCookie('refreshToken', cookieOptions)
     res.status(200).json({ message: 'sesion cerrada correctamente' })
 })
-
+ 
 router.post('/refresh-token', async (req: Request, res: Response, next: NextFunction) => {
     const refreshToken = req.cookies.refreshToken
     if (!refreshToken) return next(new AppError('No hay token de refresco', 401))
-
+ 
     try {
         const { newAccessToken, newRefreshToken } = await authService.refreshToken(refreshToken)
         res.cookie('refreshToken', newRefreshToken, {
@@ -66,5 +61,6 @@ router.post('/refresh-token', async (req: Request, res: Response, next: NextFunc
         next(error)
     }
 })
-
+ 
 export default router
+ 
