@@ -3,12 +3,14 @@ import { Prisma } from '../generated/prisma/client.js';
 import { AppError } from '../utils/error.js';
 import { ESTADO_CLASE, ESTADO_INSCRIPCION } from '../utils/estados.js';
 import { claseOcupaHorario } from '../utils/ocupacion.js';
+import { avisoHorarioService } from './avisoHorarioService.js';
 
 export const claseService = {
   async crearClase(idProfesor: string, datos: {
     id_materia: string;
     titulo: string;
     tema: string;
+    contenido?: string;
     fecha_hora_inicio: string | Date;
     fecha_hora_fin: string | Date;
     cupo_maximo: number;
@@ -50,6 +52,7 @@ export const claseService = {
         id_materia: datos.id_materia,
         titulo: datos.titulo,
         tema: datos.tema,
+        contenido: datos.contenido?.trim() || null,
         fecha_hora_inicio: inicio,
         fecha_hora_fin: fin,
         cupo_maximo: datos.cupo_maximo,
@@ -59,6 +62,64 @@ export const claseService = {
         estado: ESTADO_CLASE.disponible
       }
     });
+  },
+
+  // El profesor cambia el horario de una clase y se avisa por mail a los alumnos inscriptos.
+  async cambiarHorario(idProfesor: string, idClase: string, nuevoInicio: string | Date, nuevoFin: string | Date) {
+    const clase = await prisma.clase.findUnique({ where: { id_clase: idClase } });
+    if (!clase || clase.id_profesor !== idProfesor) {
+      throw new AppError("Clase no encontrada.", 404);
+    }
+
+    if (clase.estado !== ESTADO_CLASE.disponible && clase.estado !== ESTADO_CLASE.confirmada) {
+      throw new AppError("Solo se puede cambiar el horario de clases activas.", 400);
+    }
+
+    const inicio = new Date(nuevoInicio);
+    const fin = new Date(nuevoFin);
+
+    if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
+      throw new AppError("Las fechas ingresadas no son validas.", 400);
+    }
+    if (inicio >= fin) {
+      throw new AppError("La fecha y hora de inicio debe ser anterior a la de finalización.", 400);
+    }
+    if (inicio < new Date()) {
+      throw new AppError("El nuevo horario debe ser a futuro.", 400);
+    }
+
+    const superpuesta = await prisma.clase.findFirst({
+      where: {
+        id_profesor: idProfesor,
+        id_clase: { not: idClase },
+        ...claseOcupaHorario(new Date()),
+        fecha_hora_inicio: { lt: fin },
+        fecha_hora_fin: { gt: inicio }
+      }
+    });
+    if (superpuesta) {
+      throw new AppError("El nuevo horario se superpone con otra clase de este profesor.", 400);
+    }
+
+    const anterior = { inicio: clase.fecha_hora_inicio, fin: clase.fecha_hora_fin };
+    const huboCambio =
+      anterior.inicio.getTime() !== inicio.getTime() || anterior.fin.getTime() !== fin.getTime();
+
+    const actualizada = await prisma.clase.update({
+      where: { id_clase: idClase },
+      data: { fecha_hora_inicio: inicio, fecha_hora_fin: fin }
+    });
+
+    if (huboCambio) {
+      try {
+        await avisoHorarioService.avisarCambioHorario(idClase, anterior);
+      } catch (error) {
+        // Si falla el mail, el cambio de horario igual queda guardado.
+        console.error('Error al avisar el cambio de horario', error);
+      }
+    }
+
+    return actualizada;
   },
 
   async listarProgramadas(idProfesor: string, historial: boolean) {
@@ -82,6 +143,9 @@ export const claseService = {
       id_clase: clase.id_clase,
       titulo: clase.titulo,
       tema: clase.tema,
+      contenido: clase.contenido ?? null,
+      materialUrl: clase.materialUrl ?? null,
+      materialNombre: clase.materialNombre ?? null,
       materia: clase.materia.nombreMateria,
       inicio: clase.fecha_hora_inicio,
       fin: clase.fecha_hora_fin,
@@ -121,6 +185,9 @@ export const claseService = {
       id_clase: string;
       titulo: string;
       tema: string;
+      contenido: string | null;
+      materialUrl: string | null;
+      materialNombre: string | null;
       inicio: Date;
       fin: Date;
       cupo_maximo: number;
@@ -138,6 +205,9 @@ export const claseService = {
         c.id_clase,
         c.titulo,
         c.tema,
+        c.contenido,
+        c."materialUrl",
+        c."materialNombre",
         c.fecha_hora_inicio AS inicio,
         c.fecha_hora_fin AS fin,
         c.cupo_maximo,
@@ -201,6 +271,9 @@ export const claseService = {
         id_clase: clase.id_clase,
         titulo: clase.titulo,
         tema: clase.tema,
+        contenido: clase.contenido,
+        materialUrl: clase.materialUrl,
+        materialNombre: clase.materialNombre,
         inicio: clase.inicio,
         fin: clase.fin,
         precio: clase.precio ?? 0,

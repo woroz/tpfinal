@@ -15,15 +15,17 @@ import {
 
 const MS_MINUTO = 60_000
 
-type FranjaSemanal = { diaSemana: number; minutoInicio: number; minutoFin: number }
+// id_materia null/undefined = la franja sirve para cualquier materia que dicte el profesor
+type FranjaSemanal = { diaSemana: number; minutoInicio: number; minutoFin: number; id_materia?: string | null }
 
-export function encajaEnFranja(franjas: FranjaSemanal[], inicio: Date): boolean {
+export function encajaEnFranja(franjas: FranjaSemanal[], inicio: Date, idMateria?: string): boolean {
     const { duracionMin } = config.reservas
     if (inicio.getTime() % MS_MINUTO !== 0) return false
     const dia = diaSemanaLocal(inicio)
     const minuto = minutosDelDia(inicio)
     return franjas.some((franja) =>
         franja.diaSemana === dia
+        && (!franja.id_materia || !idMateria || franja.id_materia === idMateria)
         && minuto >= franja.minutoInicio
         && minuto + duracionMin <= franja.minutoFin
         && (minuto - franja.minutoInicio) % duracionMin === 0
@@ -66,11 +68,11 @@ export const horarioService = {
 
         const minimo = new Date(ahora.getTime() + anticipacionMin * MS_MINUTO)
         const franjas: FranjaSemanal[] = profesor.disponibilidad
-        const dias: { fecha: string; horarios: { inicio: string; fin: string }[] }[] = []
+        const dias: { fecha: string; horarios: { inicio: string; fin: string; id_materia: string | null }[] }[] = []
 
         for (const fecha of listarFechas(desde, hasta)) {
             const dia = diaSemanaDeFecha(fecha)
-            const horarios: { inicio: string; fin: string }[] = []
+            const horarios: { inicio: string; fin: string; id_materia: string | null }[] = []
 
             for (const franja of franjas.filter((f) => f.diaSemana === dia)) {
                 for (let minuto = franja.minutoInicio; minuto + duracionMin <= franja.minutoFin; minuto += duracionMin) {
@@ -78,7 +80,11 @@ export const horarioService = {
                     const fin = new Date(inicio.getTime() + duracionMin * MS_MINUTO)
                     if (inicio < minimo) continue
                     if (ocupadas.some((o) => o.fecha_hora_inicio < fin && o.fecha_hora_fin > inicio)) continue
-                    horarios.push({ inicio: inicio.toISOString(), fin: fin.toISOString() })
+                    horarios.push({
+                        inicio: inicio.toISOString(),
+                        fin: fin.toISOString(),
+                        id_materia: franja.id_materia ?? null
+                    })
                 }
             }
 

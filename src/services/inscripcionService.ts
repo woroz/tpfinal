@@ -54,6 +54,9 @@ function aDto(inscripcion: InscripcionDetalle) {
             id_clase: inscripcion.clase.id_clase,
             titulo: inscripcion.clase.titulo,
             tema: inscripcion.clase.tema,
+            contenido: inscripcion.clase.contenido ?? null,
+            materialUrl: inscripcion.clase.materialUrl ?? null,
+            materialNombre: inscripcion.clase.materialNombre ?? null,
             materia: inscripcion.clase.materia.nombreMateria,
             inicio: inscripcion.clase.fecha_hora_inicio,
             fin: inscripcion.clase.fecha_hora_fin,
@@ -145,7 +148,23 @@ async function confirmarPagoAprobado(idInscripcion: string, idPagoMp: string): P
             })
             : null
 
-        if (choque || inscripcion.estado === ESTADO_INSCRIPCION.cancelada) {
+        // Clase grupal: si la reserva vencio y otros alumnos ocuparon los cupos, no se puede confirmar (evita sobreventa)
+        let sinCupo = false
+        if (inscripcion.clase.tipo !== 'individual') {
+            const otrosActivos = await tx.inscripcion.count({
+                where: {
+                    id_clase: inscripcion.id_clase,
+                    id_inscripcion: { not: idInscripcion },
+                    OR: [
+                        { estado: ESTADO_INSCRIPCION.confirmada },
+                        { estado: ESTADO_INSCRIPCION.pendientePago, expiraEn: { gt: ahora } }
+                    ]
+                }
+            })
+            sinCupo = otrosActivos >= inscripcion.clase.cupo_maximo
+        }
+
+        if (choque || sinCupo || inscripcion.estado === ESTADO_INSCRIPCION.cancelada) {
             await tx.pago.update({
                 where: { id_inscripcion: idInscripcion },
                 data: { estado: ESTADO_PAGO.reembolsoPendiente, id_mercadopago: idPagoMp, fecha_pago: ahora }
@@ -212,6 +231,10 @@ async function aplicarPagoMp(pagoMp: PagoMp): Promise<void> {
             console.error('El monto del pago no coincide con la reserva', { idPagoMp: pagoMp.id, esperado: pago.monto, recibido: pagoMp.monto })
             return
         }
+        if (pagoMp.moneda && pagoMp.moneda !== 'ARS') {
+            console.error('La moneda del pago no es ARS', { idPagoMp: pagoMp.id, moneda: pagoMp.moneda })
+            return
+        }
         await confirmarPagoAprobado(pagoMp.referencia, pagoMp.id)
         return
     }
@@ -257,7 +280,7 @@ export const inscripcionService = {
             const asociacion = profesor.materias[0]
             if (!asociacion) throw new AppError('El profesor no dicta esa materia', 400)
 
-            if (!encajaEnFranja(profesor.disponibilidad, inicio)) {
+            if (!encajaEnFranja(profesor.disponibilidad, inicio, datos.id_materia)) {
                 throw new AppError('El horario elegido no esta disponible', 409)
             }
 

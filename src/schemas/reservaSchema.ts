@@ -45,7 +45,8 @@ export const guardarDisponibilidadSchema = z.object({
     franjas: z.array(z.object({
         diaSemana: z.number().int().min(0).max(6),
         desde: hora,
-        hasta: hora
+        hasta: hora,
+        id_materia: z.uuid().nullable().optional()
     })).max(70, 'Hay demasiadas franjas horarias')
 })
 

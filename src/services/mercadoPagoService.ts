@@ -73,7 +73,8 @@ export const mercadoPagoService = {
             id: String(pago.id),
             estado: pago.status ?? '',
             referencia: pago.external_reference ?? null,
-            monto: pago.transaction_amount ?? 0
+            monto: pago.transaction_amount ?? 0,
+            moneda: pago.currency_id ?? ''
         }
     },
 
@@ -89,7 +90,14 @@ export const mercadoPagoService = {
 
     firmaValida(cabeceras: Record<string, string | string[] | undefined>, idDato: string): boolean {
         const secreto = config.mercadoPago.webhookSecret
-        if (!secreto) return true
+        if (!secreto) {
+            // Sin secreto solo se acepta en desarrollo. En produccion se rechaza (fail closed).
+            if (config.nodeEnv === 'production') {
+                console.error('MP_WEBHOOK_SECRET no configurado: se rechaza el webhook')
+                return false
+            }
+            return true
+        }
 
         const firma = cabeceras['x-signature']
         const idSolicitud = cabeceras['x-request-id']
