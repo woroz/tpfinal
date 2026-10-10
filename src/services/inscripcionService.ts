@@ -9,7 +9,23 @@ import { mercadoPagoService } from './mercadoPagoService.js'
 import { notificacionService } from './notificacionService.js'
 
 type Tx = Prisma.TransactionClient
+
 type Plataforma = 'web' | 'app'
+
+type ReservaParticular = {
+    id_profesor: string
+    id_materia: string
+    inicio: string
+    tema?: string
+    plataforma: Plataforma
+}
+
+type ReservaClaseProgramada = {
+    id_clase: string
+    plataforma: Plataforma
+}
+
+type DatosReserva = ReservaParticular | ReservaClaseProgramada
 
 const MS_MINUTO = 60_000
 
@@ -38,6 +54,9 @@ function aDto(inscripcion: InscripcionDetalle) {
             id_clase: inscripcion.clase.id_clase,
             titulo: inscripcion.clase.titulo,
             tema: inscripcion.clase.tema,
+            contenido: inscripcion.clase.contenido ?? null,
+            materialUrl: inscripcion.clase.materialUrl ?? null,
+            materialNombre: inscripcion.clase.materialNombre ?? null,
             materia: inscripcion.clase.materia.nombreMateria,
             inicio: inscripcion.clase.fecha_hora_inicio,
             fin: inscripcion.clase.fecha_hora_fin,
@@ -61,6 +80,10 @@ function aDto(inscripcion: InscripcionDetalle) {
 
 async function bloquearProfesor(tx: Tx, idProfesor: string): Promise<void> {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${idProfesor}))`
+}
+
+async function bloquearClase(tx: Tx, idClase: string): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${idClase}))`
 }
 
 async function liberarReserva(idInscripcion: string, idClase: string): Promise<void> {
@@ -112,18 +135,36 @@ async function confirmarPagoAprobado(idInscripcion: string, idPagoMp: string): P
         }
 
         const ahora = new Date()
-        const choque = await tx.clase.findFirst({
-            where: {
-                id_profesor: inscripcion.clase.id_profesor,
-                id_clase: { not: inscripcion.id_clase },
-                ...claseOcupaHorario(ahora),
-                fecha_hora_inicio: { lt: inscripcion.clase.fecha_hora_fin },
-                fecha_hora_fin: { gt: inscripcion.clase.fecha_hora_inicio }
-            },
-            select: { id_clase: true }
-        })
+        const choque = inscripcion.clase.tipo === 'individual'
+            ? await tx.clase.findFirst({
+                where: {
+                    id_profesor: inscripcion.clase.id_profesor,
+                    id_clase: { not: inscripcion.id_clase },
+                    ...claseOcupaHorario(ahora),
+                    fecha_hora_inicio: { lt: inscripcion.clase.fecha_hora_fin },
+                    fecha_hora_fin: { gt: inscripcion.clase.fecha_hora_inicio }
+                },
+                select: { id_clase: true }
+            })
+            : null
 
-        if (choque || inscripcion.estado === ESTADO_INSCRIPCION.cancelada) {
+        // Clase grupal: si la reserva vencio y otros alumnos ocuparon los cupos, no se puede confirmar (evita sobreventa)
+        let sinCupo = false
+        if (inscripcion.clase.tipo !== 'individual') {
+            const otrosActivos = await tx.inscripcion.count({
+                where: {
+                    id_clase: inscripcion.id_clase,
+                    id_inscripcion: { not: idInscripcion },
+                    OR: [
+                        { estado: ESTADO_INSCRIPCION.confirmada },
+                        { estado: ESTADO_INSCRIPCION.pendientePago, expiraEn: { gt: ahora } }
+                    ]
+                }
+            })
+            sinCupo = otrosActivos >= inscripcion.clase.cupo_maximo
+        }
+
+        if (choque || sinCupo || inscripcion.estado === ESTADO_INSCRIPCION.cancelada) {
             await tx.pago.update({
                 where: { id_inscripcion: idInscripcion },
                 data: { estado: ESTADO_PAGO.reembolsoPendiente, id_mercadopago: idPagoMp, fecha_pago: ahora }
@@ -135,10 +176,25 @@ async function confirmarPagoAprobado(idInscripcion: string, idPagoMp: string): P
             where: { id_inscripcion: idInscripcion },
             data: { estado: ESTADO_INSCRIPCION.confirmada, expiraEn: null }
         })
-        await tx.clase.update({
-            where: { id_clase: inscripcion.id_clase },
-            data: { estado: ESTADO_CLASE.confirmada }
-        })
+        if (inscripcion.clase.tipo === 'individual') {
+            await tx.clase.update({
+                where: { id_clase: inscripcion.id_clase },
+                data: { estado: ESTADO_CLASE.confirmada }
+            })
+        } else {
+            const cuposConfirmados = await tx.inscripcion.count({
+                where: {
+                    id_clase: inscripcion.id_clase,
+                    estado: ESTADO_INSCRIPCION.confirmada
+                }
+            })
+            if (cuposConfirmados >= inscripcion.clase.cupo_maximo) {
+                await tx.clase.update({
+                    where: { id_clase: inscripcion.id_clase },
+                    data: { estado: ESTADO_CLASE.confirmada }
+                })
+            }
+        }
         await tx.pago.update({
             where: { id_inscripcion: idInscripcion },
             data: { estado: ESTADO_PAGO.aprobado, id_mercadopago: idPagoMp, fecha_pago: ahora }
@@ -175,6 +231,10 @@ async function aplicarPagoMp(pagoMp: PagoMp): Promise<void> {
             console.error('El monto del pago no coincide con la reserva', { idPagoMp: pagoMp.id, esperado: pago.monto, recibido: pagoMp.monto })
             return
         }
+        if (pagoMp.moneda && pagoMp.moneda !== 'ARS') {
+            console.error('La moneda del pago no es ARS', { idPagoMp: pagoMp.id, moneda: pagoMp.moneda })
+            return
+        }
         await confirmarPagoAprobado(pagoMp.referencia, pagoMp.id)
         return
     }
@@ -190,8 +250,12 @@ async function aplicarPagoMp(pagoMp: PagoMp): Promise<void> {
 export const inscripcionService = {
     async reservar(
         idAlumno: string,
-        datos: { id_profesor: string; id_materia: string; inicio: string; tema?: string; plataforma: Plataforma }
+        datos: DatosReserva
     ) {
+        if ('id_clase' in datos) {
+            return this.reservarClaseProgramada(idAlumno, datos)
+        }
+
         const { duracionMin, anticipacionMin, retencionMin } = config.reservas
         const ahora = new Date()
         const inicio = new Date(datos.inicio)
@@ -216,7 +280,7 @@ export const inscripcionService = {
             const asociacion = profesor.materias[0]
             if (!asociacion) throw new AppError('El profesor no dicta esa materia', 400)
 
-            if (!encajaEnFranja(profesor.disponibilidad, inicio)) {
+            if (!encajaEnFranja(profesor.disponibilidad, inicio, datos.id_materia)) {
                 throw new AppError('El horario elegido no esta disponible', 409)
             }
 
@@ -319,6 +383,164 @@ export const inscripcionService = {
             return { inscripcion: await obtenerDetalle(reserva.idInscripcion), urlPago }
         } catch (error) {
             await liberarReserva(reserva.idInscripcion, reserva.idClase)
+            throw error
+        }
+    },
+
+    async reservarClaseProgramada(
+        idAlumno: string,
+        datos: ReservaClaseProgramada
+    ) {
+        const { retencionMin } = config.reservas
+        const ahora = new Date()
+
+        const reserva = await prisma.$transaction(async (tx: Tx) => {
+            const claseInicial = await tx.clase.findUnique({
+                where: { id_clase: datos.id_clase },
+                include: { materia: true }
+            })
+            if (!claseInicial) {
+                throw new AppError('Clase no encontrada', 404)
+            }
+
+            await bloquearClase(tx, datos.id_clase)
+
+            const clase = await tx.clase.findUnique({
+                where: { id_clase: datos.id_clase },
+                include: { materia: true }
+            })
+            if (!clase) {
+                throw new AppError('Clase no encontrada', 404)
+            }
+            if (clase.tipo === 'individual' || clase.origen === 'reserva') {
+                throw new AppError('Esta clase requiere una reserva particular', 409)
+            }
+            if (clase.estado !== ESTADO_CLASE.disponible) {
+                throw new AppError('Esta clase ya no está disponible', 409)
+            }
+            if (clase.fecha_hora_inicio <= ahora) {
+                throw new AppError('Esta clase ya comenzó', 409)
+            }
+
+            const inscripcionesActivas = await tx.inscripcion.count({
+                where: {
+                    id_clase: clase.id_clase,
+                    OR: [
+                        { estado: ESTADO_INSCRIPCION.confirmada },
+                        { estado: ESTADO_INSCRIPCION.pendientePago, expiraEn: { gt: ahora } }
+                    ]
+                }
+            })
+            if (inscripcionesActivas >= clase.cupo_maximo) {
+                throw new AppError('No quedan cupos disponibles', 409)
+            }
+
+            const inscripcionExistente = await tx.inscripcion.findFirst({
+                where: {
+                    id_clase: clase.id_clase,
+                    id_alumno: idAlumno,
+                    OR: [
+                        { estado: ESTADO_INSCRIPCION.confirmada },
+                        { estado: ESTADO_INSCRIPCION.pendientePago, expiraEn: { gt: ahora } }
+                    ]
+                },
+                select: { id_inscripcion: true }
+            })
+            if (inscripcionExistente) {
+                throw new AppError('Ya estás inscripto en esta clase', 409)
+            }
+
+            const choqueAlumno = await tx.inscripcion.findFirst({
+                where: {
+                    id_alumno: idAlumno,
+                    OR: [
+                        { estado: ESTADO_INSCRIPCION.confirmada },
+                        { estado: ESTADO_INSCRIPCION.pendientePago, expiraEn: { gt: ahora } }
+                    ],
+                    clase: {
+                        fecha_hora_inicio: { lt: clase.fecha_hora_fin },
+                        fecha_hora_fin: { gt: clase.fecha_hora_inicio }
+                    }
+                },
+                select: { id_inscripcion: true }
+            })
+            if (choqueAlumno) {
+                throw new AppError('Ya tenés otra clase reservada en ese horario', 409)
+            }
+
+            const monto = Math.round(clase.precio ?? 0)
+            const gratis = monto <= 0
+            const expiraEn = gratis
+                ? null
+                : new Date(ahora.getTime() + retencionMin * MS_MINUTO)
+
+            const inscripcion = await tx.inscripcion.create({
+                data: {
+                    id_clase: clase.id_clase,
+                    id_alumno: idAlumno,
+                    estado: gratis
+                        ? ESTADO_INSCRIPCION.confirmada
+                        : ESTADO_INSCRIPCION.pendientePago,
+                    expiraEn
+                }
+            })
+
+            if (gratis && inscripcionesActivas + 1 >= clase.cupo_maximo) {
+                await tx.clase.update({
+                    where: { id_clase: clase.id_clase },
+                    data: { estado: ESTADO_CLASE.confirmada }
+                })
+            }
+
+            if (!gratis) {
+                await tx.pago.create({
+                    data: {
+                        id_inscripcion: inscripcion.id_inscripcion,
+                        monto,
+                        medioPago: 'mercadopago',
+                        estado: ESTADO_PAGO.pendiente
+                    }
+                })
+            }
+
+            return {
+                idInscripcion: inscripcion.id_inscripcion,
+                idClase: clase.id_clase,
+                titulo: clase.titulo,
+                monto,
+                expiraEn
+            }
+        })
+
+        if (reserva.monto <= 0) {
+            await notificacionService.reservaConfirmada(reserva.idInscripcion)
+            return { inscripcion: await obtenerDetalle(reserva.idInscripcion), urlPago: null }
+        }
+
+        try {
+            const { idPreferencia, urlPago } = await mercadoPagoService.crearPreferencia({
+                idInscripcion: reserva.idInscripcion,
+                titulo: reserva.titulo,
+                monto: reserva.monto,
+                expiraEn: reserva.expiraEn as Date,
+                plataforma: datos.plataforma
+            })
+            await prisma.pago.update({
+                where: { id_inscripcion: reserva.idInscripcion },
+                data: { id_preferencia: idPreferencia }
+            })
+            return { inscripcion: await obtenerDetalle(reserva.idInscripcion), urlPago }
+        } catch (error) {
+            await prisma.$transaction([
+                prisma.inscripcion.update({
+                    where: { id_inscripcion: reserva.idInscripcion },
+                    data: { estado: ESTADO_INSCRIPCION.cancelada, expiraEn: null }
+                }),
+                prisma.pago.updateMany({
+                    where: { id_inscripcion: reserva.idInscripcion },
+                    data: { estado: ESTADO_PAGO.rechazado }
+                })
+            ])
             throw error
         }
     },

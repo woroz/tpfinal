@@ -16,13 +16,26 @@ export const historialQuerySchema = z.object({
     historial: z.enum(['true', 'false']).optional()
 })
 
-export const crearInscripcionSchema = z.object({
+export const reservaParticularSchema = z.object({
     id_profesor: z.uuid('El profesor no es valido'),
     id_materia: z.uuid('La materia no es valida'),
-    inicio: z.iso.datetime({ offset: true, message: 'La fecha de inicio no es valida' }),
+    inicio: z.iso.datetime({
+        offset: true,
+        message: 'la fecha de inicio no es valida'
+    }),
     tema: z.string().trim().max(200, 'El tema no puede tener mas de 200 caracteres').optional(),
     plataforma: z.enum(['web', 'app']).default('web')
 })
+
+export const reservaClaseProgramadaSchema = z.object({
+    id_clase: z.uuid('La clase no es válida'),
+    plataforma: z.enum(['web', 'app']).default('web')
+})
+
+export const crearInscripcionSchema = z.union([
+    reservaParticularSchema,
+    reservaClaseProgramadaSchema
+])
 
 export const pagarInscripcionSchema = z.object({
     plataforma: z.enum(['web', 'app']).default('web')
@@ -32,7 +45,8 @@ export const guardarDisponibilidadSchema = z.object({
     franjas: z.array(z.object({
         diaSemana: z.number().int().min(0).max(6),
         desde: hora,
-        hasta: hora
+        hasta: hora,
+        id_materia: z.uuid().nullable().optional()
     })).max(70, 'Hay demasiadas franjas horarias')
 })
 

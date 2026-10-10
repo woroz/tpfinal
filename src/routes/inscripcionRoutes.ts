@@ -8,11 +8,12 @@ import {
     pagarInscripcionSchema
 } from '../schemas/reservaSchema.js'
 import { obtenerIdRol, validar } from '../utils/validar.js'
+import { validate } from '../middlewares/validateMiddleware.js'
 
 const router = Router()
 
-router.post('/', auth(['alumno']), async (req: Request, res: Response) => {
-    const datos = validar(crearInscripcionSchema, req.body)
+router.post('/', auth(['alumno']), validate(crearInscripcionSchema), async (req: Request, res: Response) => {
+    const datos = req.body
     const resultado = await inscripcionService.reservar(obtenerIdRol(req), datos)
     res.status(201).json({
         message: resultado.urlPago ? 'Reserva creada, falta completar el pago' : 'Reserva confirmada',

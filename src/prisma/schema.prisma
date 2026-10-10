@@ -111,13 +111,15 @@ model profesorMateria {
 
   @@id([id_materia, id_profesor])
 }
-
 model Clase {
-  id_clase          String              @id @default(uuid())
+  id_clase          String   @id @default(uuid())
   id_profesor       String
   id_materia        String
   titulo            String
   tema              String
+  contenido         String?  @db.Text
+  materialNombre    String?
+  materialUrl       String?
   fecha_hora_inicio DateTime
   fecha_hora_fin    DateTime
   cupo_maximo       Int
@@ -125,25 +127,23 @@ model Clase {
   tipo              String
   origen            String
   estado            String
-  contenido         String?
-  materialNombre    String?
-  materialUrl       String?
-  materia           materia             @relation(fields: [id_materia], references: [id_materia])
-  profesor          Profesor            @relation(fields: [id_profesor], references: [id_profesor])
-  inscripciones     Inscripcion[]
-  notificaciones    Notificacion[]
-  recordatorios     Recordatorio[]
-  resenas           Resena[]
-  calificaciones    calificacion[]
-  grabacion         grabacion?
-  materiales        materialDidactico[]
-  mensajes          mensaje[]
-  ofertas           ofertaSolicitud[]
-  quizzes           quiz[]
-  reclamos          reclamo[]
-  salaVideollamada  salaVideollamada?
-  tareas            tarea[]
-  transcripcion     transcripcion?
+
+  materia          materia             @relation(fields: [id_materia], references: [id_materia])
+  profesor         Profesor            @relation(fields: [id_profesor], references: [id_profesor])
+  inscripciones    Inscripcion[]
+  notificaciones   Notificacion[]
+  recordatorios    Recordatorio[]
+  resenas          Resena[]
+  calificaciones   calificacion[]
+  grabacion        grabacion?
+  materiales       materialDidactico[]
+  mensajes         mensaje[]
+  ofertas          ofertaSolicitud[]
+  quizzes          quiz[]
+  reclamos         reclamo[]
+  salaVideollamada salaVideollamada?
+  tareas           tarea[]
+  transcripcion    transcripcion?
 
   @@index([id_profesor, fecha_hora_inicio])
 }

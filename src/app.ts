@@ -7,6 +7,8 @@ import { config } from './config/index.js'
 import { errorMiddleware } from './middlewares/errorMiddleware.js'
 import { AppError } from './utils/error.js'
 import pagoRoutes from './routes/pagoRoutes.js'
+import materialRoutes from './routes/materialRoutes.js'
+import claseHorarioRoutes from './routes/claseHorarioRoutes.js'
 
 const app = express()
 app.set('trust proxy', 1)
@@ -29,6 +31,8 @@ app.use(cors({
 app.use(helmet())
 app.use(express.json())
 app.use(cookieParser())
+app.use('/clases', materialRoutes)
+app.use('/clases', claseHorarioRoutes)
 app.use('/pagos', pagoRoutes)
 app.use('/', routes)
 

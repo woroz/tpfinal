@@ -146,7 +146,8 @@ export const profesorService = {
             disponibilidad: profesor.disponibilidad.map((franja) => ({
                 diaSemana: franja.diaSemana,
                 desde: minutosAHora(franja.minutoInicio),
-                hasta: minutosAHora(franja.minutoFin)
+                hasta: minutosAHora(franja.minutoFin),
+                id_materia: franja.id_materia
             })),
             promedioResenas
         }
@@ -213,7 +214,8 @@ export const profesorService = {
         return disponibilidad.map((franja) => ({
             diaSemana: franja.diaSemana,
             desde: minutosAHora(franja.minutoInicio),
-            hasta: minutosAHora(franja.minutoFin)
+            hasta: minutosAHora(franja.minutoFin),
+            id_materia: franja.id_materia
         }))
     },
 

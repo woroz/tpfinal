@@ -1,139 +1,149 @@
-import nodemailer, { type Transporter } from 'nodemailer'
+import nodemailer from 'nodemailer'
 import { prisma } from '../utils/prisma.js'
-import { AppError } from '../utils/error.js'
-import { config } from '../config/index.js'
-import { formatearFechaHora } from '../utils/fechas.js'
 
-let transporte: Transporter | null | undefined
+const transporte = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT ?? 587),
+  secure: Number(process.env.SMTP_PORT) === 465,
+  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+})
 
-function obtenerTransporte(): Transporter | null {
-    if (transporte !== undefined) return transporte
-    transporte = config.mail.host
-        ? nodemailer.createTransport({
-            host: config.mail.host,
-            port: config.mail.port,
-            secure: config.mail.port === 465,
-            auth: config.mail.user ? { user: config.mail.user, pass: config.mail.pass } : undefined
-        })
-        : null
-    return transporte
-}
+const esc = (t: string) =>
+  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
-async function enviarMail(para: string, asunto: string, texto: string): Promise<void> {
-    const canal = obtenerTransporte()
-    if (!canal) return
-    try {
-        await canal.sendMail({ from: config.mail.from, to: para, subject: asunto, text: texto })
-    } catch (error) {
-        console.error('Error al enviar el mail', { para, message: (error as Error).message })
+const fmt = (d: Date) =>
+  d.toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'full', timeStyle: 'short' })
+
+async function crearNotificacionParaInscripcion(
+  idInscripcion: string,
+  tipo: 'reserva_confirmada' | 'reserva_no_disponible',
+  titulo: string,
+  mensaje: string
+) {
+  const inscripcion = await prisma.inscripcion.findUnique({
+    where: { id_inscripcion: idInscripcion },
+    include: {
+      clase: { select: { id_clase: true, titulo: true } },
+      alumno: { select: { id_usuario: true } }
     }
-}
+  })
 
-type Aviso = {
-    id_usuario: string
-    email: string
-    tipo: string
-    titulo: string
-    mensaje: string
-    id_clase: string
-}
+  if (!inscripcion) return
 
-async function enviarAvisos(avisos: Aviso[]): Promise<void> {
-    await prisma.notificacion.createMany({
-        data: avisos.map((aviso) => ({
-            id_usuario: aviso.id_usuario,
-            id_clase: aviso.id_clase,
-            tipo: aviso.tipo,
-            titulo: aviso.titulo,
-            mensaje: aviso.mensaje
-        }))
-    })
-    await Promise.all(avisos.map((aviso) => enviarMail(aviso.email, aviso.titulo, aviso.mensaje)))
+  await prisma.notificacion.create({
+    data: {
+      id_usuario: inscripcion.alumno.id_usuario,
+      id_clase: inscripcion.clase.id_clase,
+      tipo,
+      titulo,
+      mensaje
+    }
+  })
 }
 
 export const notificacionService = {
-    async reservaConfirmada(idInscripcion: string): Promise<void> {
-        try {
-            const inscripcion = await prisma.inscripcion.findUnique({
-                where: { id_inscripcion: idInscripcion },
-                include: {
-                    alumno: { include: { usuario: true } },
-                    clase: { include: { materia: true, profesor: { include: { usuario: true } } } }
-                }
-            })
-            if (!inscripcion) return
+  async listar(idUsuario: string) {
+    return prisma.notificacion.findMany({
+      where: { id_usuario: idUsuario },
+      orderBy: { createdAt: 'desc' }
+    })
+  },
 
-            const { clase, alumno } = inscripcion
-            const cuando = formatearFechaHora(clase.fecha_hora_inicio)
-            const materia = clase.materia.nombreMateria
-            const profesor = clase.profesor.usuario
-            const estudiante = alumno.usuario
+  async marcarLeida(idUsuario: string, idNotificacion: string) {
+    await prisma.notificacion.updateMany({
+      where: { id_usuario: idUsuario, id_notificacion: idNotificacion },
+      data: { leida: true }
+    })
+  },
 
-            await enviarAvisos([
-                {
-                    id_usuario: estudiante.id_usuario,
-                    email: estudiante.email,
-                    id_clase: clase.id_clase,
-                    tipo: 'reserva_confirmada',
-                    titulo: 'Reserva confirmada',
-                    mensaje: `Tu clase de ${materia} con ${profesor.nombre} quedo confirmada para el ${cuando}.`
-                },
-                {
-                    id_usuario: profesor.id_usuario,
-                    email: profesor.email,
-                    id_clase: clase.id_clase,
-                    tipo: 'nueva_reserva',
-                    titulo: 'Nueva clase reservada',
-                    mensaje: `${estudiante.nombre} reservo una clase de ${materia} para el ${cuando}.`
-                }
-            ])
-        } catch (error) {
-            console.error('Error al notificar la reserva', { idInscripcion, message: (error as Error).message })
-        }
-    },
+  async reservaConfirmada(idInscripcion: string) {
+    const inscripcion = await prisma.inscripcion.findUnique({
+      where: { id_inscripcion: idInscripcion },
+      include: { clase: true, alumno: { include: { usuario: { select: { id_usuario: true } } } } }
+    })
 
-    async reservaNoDisponible(idInscripcion: string, reembolsado: boolean): Promise<void> {
-        try {
-            const inscripcion = await prisma.inscripcion.findUnique({
-                where: { id_inscripcion: idInscripcion },
-                include: {
-                    alumno: { include: { usuario: true } },
-                    clase: { include: { materia: true } }
-                }
-            })
-            if (!inscripcion) return
+    if (!inscripcion) return
 
-            const { clase, alumno } = inscripcion
-            const detalle = reembolsado
-                ? 'Te devolvimos el pago.'
-                : 'Vamos a gestionar la devolucion del pago a la brevedad.'
+    await prisma.notificacion.create({
+      data: {
+        id_usuario: inscripcion.alumno.usuario.id_usuario,
+        id_clase: inscripcion.id_clase,
+        tipo: 'reserva_confirmada',
+        titulo: 'Reserva confirmada',
+        mensaje: `Tu reserva para "${inscripcion.clase.titulo}" fue confirmada.`
+      }
+    })
+  },
 
-            await enviarAvisos([{
-                id_usuario: alumno.usuario.id_usuario,
-                email: alumno.usuario.email,
-                id_clase: clase.id_clase,
-                tipo: 'reserva_no_disponible',
-                titulo: 'No pudimos confirmar tu reserva',
-                mensaje: `El horario de tu clase de ${clase.materia.nombreMateria} dejo de estar disponible antes de acreditarse el pago. ${detalle}`
-            }])
-        } catch (error) {
-            console.error('Error al notificar la reserva no disponible', { idInscripcion, message: (error as Error).message })
-        }
-    },
+  async reservaNoDisponible(idInscripcion: string, reembolsado: boolean) {
+    const inscripcion = await prisma.inscripcion.findUnique({
+      where: { id_inscripcion: idInscripcion },
+      include: { clase: true, alumno: { include: { usuario: { select: { id_usuario: true } } } } }
+    })
 
-    listar(idUsuario: string) {
-        return prisma.notificacion.findMany({
-            where: { id_usuario: idUsuario },
-            orderBy: { createdAt: 'desc' },
-            take: 50
-        })
-    },
+    if (!inscripcion) return
 
-    async marcarLeida(idUsuario: string, idNotificacion: string): Promise<void> {
-        const resultado = await prisma.notificacion.updateMany({
-            where: { id_notificacion: idNotificacion, id_usuario: idUsuario },
-            data: { leida: true }
-        })
-        if (resultado.count === 0) throw new AppError('Notificacion no encontrada', 404)
+    await prisma.notificacion.create({
+      data: {
+        id_usuario: inscripcion.alumno.usuario.id_usuario,
+        id_clase: inscripcion.id_clase,
+        tipo: 'reserva_no_disponible',
+        titulo: 'Reserva no disponible',
+        mensaje: reembolsado
+          ? `La reserva para "${inscripcion.clase.titulo}" no quedó disponible y se procesó tu reembolso.`
+          : `La reserva para "${inscripcion.clase.titulo}" no quedó disponible.`
+      }
+    })
+  },
+
+  /** Llamar despues de actualizar una clase cuyo horario cambio. */
+  async avisarCambioHorario(idClase: string, anterior: { inicio: Date; fin: Date }) {
+    const clase = await prisma.clase.findUnique({ where: { id_clase: idClase } })
+    if (!clase) return
+
+    const inscripciones = await prisma.inscripcion.findMany({
+      where: { id_clase: idClase, estado: 'confirmada' },
+      select: { id_alumno: true }
+    })
+    if (!inscripciones.length) return
+
+    const alumnos = await prisma.alumno.findMany({
+      where: { id_alumno: { in: inscripciones.map((i) => i.id_alumno) } },
+      select: { id_usuario: true }
+    })
+    const usuarios = await prisma.usuario.findMany({
+      where: { id_usuario: { in: alumnos.map((a) => a.id_usuario) } },
+      select: { id_usuario: true, email: true, nombre: true }
+    })
+
+    try {
+      await prisma.notificacion.createMany({
+        data: usuarios.map((u) => ({
+          id_usuario: u.id_usuario,
+          id_clase: idClase,
+          tipo: 'cambio_horario',
+          titulo: `Cambio de horario: ${clase.titulo}`,
+          mensaje: `El profesor cambio el horario de "${clase.titulo}". Antes: ${fmt(anterior.inicio)}. Ahora: ${fmt(clase.fecha_hora_inicio)}.`
+        }))
+      })
+    } catch (error) {
+      console.error('No se pudieron guardar las notificaciones de cambio de horario', error)
     }
+
+    const resultados = await Promise.allSettled(
+      usuarios.map((u) =>
+        transporte.sendMail({
+          from: process.env.MAIL_FROM,
+          to: u.email,
+          subject: `Cambio de horario: ${clase.titulo}`,
+          html: `<p>Hola ${esc(u.nombre)},</p>
+<p>El profesor modifico el horario de la clase <b>${esc(clase.titulo)}</b>.</p>
+<p><b>Antes:</b> ${fmt(anterior.inicio)}<br><b>Ahora:</b> ${fmt(clase.fecha_hora_inicio)}</p>
+<p>Si no podes asistir en el nuevo horario, comunicate con el profesor.</p>`
+        })
+      )
+    )
+    const fallidos = resultados.filter((r) => r.status === 'rejected').length
+    if (fallidos) console.error(`No se pudieron enviar ${fallidos} mails de cambio de horario`)
+  }
 }
