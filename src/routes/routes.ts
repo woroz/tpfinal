@@ -9,6 +9,7 @@ import notificacionRoutes from './notificacionRoutes.js'
 import perfilRoutes from './perfilRoutes.js';
 import materiaRoutes from './materiaRoutes.js';
 import areaRoutes from './areaRoutes.js';
+import salaVideoLlamadaRoutes from './salaVideoLlamadaRoutes.js';
 
 const router = Router()
 router.use('/clases', claseRoutes);
@@ -21,5 +22,6 @@ router.use('/notificaciones', notificacionRoutes)
 router.use('/perfil', perfilRoutes)
 router.use('/materias', materiaRoutes);
 router.use('/areas', areaRoutes);
+router.use('/sala-videollamada', salaVideoLlamadaRoutes);
 
 export default router
