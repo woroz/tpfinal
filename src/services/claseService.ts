@@ -131,6 +131,7 @@ export const claseService = {
       },
       include: {
         materia: true,
+        archivosPdf: { orderBy: { fecha_carga: 'asc' } },
         inscripciones: {
           where: { estado: ESTADO_INSCRIPCION.confirmada },
           include: { alumno: { include: { usuario: { select: { nombre: true } } } } }
@@ -146,6 +147,11 @@ export const claseService = {
       contenido: clase.contenido ?? null,
       materialUrl: clase.materialUrl ?? null,
       materialNombre: clase.materialNombre ?? null,
+      materialesPdf: clase.archivosPdf.map((material: { id_material: string; nombre: string; url: string }) => ({
+        id_material: material.id_material,
+        nombre: material.nombre,
+        url: material.url
+      })),
       materia: clase.materia.nombreMateria,
       inicio: clase.fecha_hora_inicio,
       fin: clase.fecha_hora_fin,
@@ -265,6 +271,18 @@ export const claseService = {
       LIMIT 50
     `;
 
+    const materialesPdf = await prisma.materialClase.findMany({
+      where: { id_clase: { in: clases.map((clase) => clase.id_clase) } },
+      orderBy: { fecha_carga: 'asc' },
+      select: { id_clase: true, nombre: true, url: true }
+    });
+    const materialesPorClase = new Map<string, Array<{ nombre: string; url: string }>>();
+    for (const material of materialesPdf) {
+      const lista = materialesPorClase.get(material.id_clase) ?? [];
+      lista.push({ nombre: material.nombre, url: material.url });
+      materialesPorClase.set(material.id_clase, lista);
+    }
+
     return clases
       .filter((clase) => clase.cupos_ocupados < clase.cupo_maximo)
       .map((clase) => ({
@@ -274,6 +292,11 @@ export const claseService = {
         contenido: clase.contenido,
         materialUrl: clase.materialUrl,
         materialNombre: clase.materialNombre,
+        materialesPdf: materialesPorClase.get(clase.id_clase) ?? (
+          clase.materialUrl
+            ? [{ nombre: clase.materialNombre ?? 'Material de la clase', url: clase.materialUrl }]
+            : []
+        ),
         inicio: clase.inicio,
         fin: clase.fin,
         precio: clase.precio ?? 0,

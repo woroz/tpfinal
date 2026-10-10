@@ -1,4 +1,4 @@
-import { put } from '@vercel/blob'
+import { del, put } from '@vercel/blob'
 import { AppError } from '../utils/error.js'
 
 const MAX_BYTES = 4 * 1024 * 1024
@@ -15,5 +15,9 @@ export const materialService = {
       addRandomSuffix: true
     })
     return { url: blob.url, nombre: archivo.originalname.slice(0, 120) }
-  }
+  },
+
+  async eliminarPdf(url: string) {
+    await del(url)
+  },
 }

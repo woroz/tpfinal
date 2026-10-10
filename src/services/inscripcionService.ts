@@ -33,6 +33,7 @@ const incluirDetalle = {
     clase: {
         include: {
             materia: true,
+            archivosPdf: { orderBy: { fecha_carga: 'asc' } },
             profesor: { include: { usuario: { select: { nombre: true } } } }
         }
     },
@@ -57,6 +58,10 @@ function aDto(inscripcion: InscripcionDetalle) {
             contenido: inscripcion.clase.contenido ?? null,
             materialUrl: inscripcion.clase.materialUrl ?? null,
             materialNombre: inscripcion.clase.materialNombre ?? null,
+            materialesPdf: inscripcion.clase.archivosPdf.map((material) => ({
+                nombre: material.nombre,
+                url: material.url
+            })),
             materia: inscripcion.clase.materia.nombreMateria,
             inicio: inscripcion.clase.fecha_hora_inicio,
             fin: inscripcion.clase.fecha_hora_fin,
