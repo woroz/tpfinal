@@ -120,6 +120,7 @@ model Clase {
   contenido         String?  @db.Text
   materialNombre    String?
   materialUrl       String?
+  archivosPdf       materialClase[]
   fecha_hora_inicio DateTime
   fecha_hora_fin    DateTime
   cupo_maximo       Int
@@ -397,6 +398,17 @@ model materialDidactico {
   destinatarios materialAlumno[]
   clase         Clase            @relation(fields: [id_clase], references: [id_clase])
   profesor      Profesor         @relation(fields: [id_profesor], references: [id_profesor])
+}
+
+model materialClase {
+  id_material String   @id @default(uuid())
+  id_clase    String
+  nombre      String
+  url         String
+  fecha_carga DateTime @default(now())
+  clase       Clase    @relation(fields: [id_clase], references: [id_clase], onDelete: Cascade)
+
+  @@index([id_clase])
 }
 
 model materialAlumno {

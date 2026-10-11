@@ -255,18 +255,22 @@ export const profesorService = {
     },
 
     desasociarMateria: async (id_profesor: string, id_materia: string) => {
-        try {
-            await prisma.profesorMateria.delete({
+        return prisma.$transaction(async (tx) => {
+            const eliminada = await tx.profesorMateria.deleteMany({
                 where: {
-                    id_materia_id_profesor: {
-                        id_materia,
-                        id_profesor: id_profesor
-                    }
+                    id_materia,
+                    id_profesor
                 }
             });
+            if (!eliminada.count) {
+                throw new AppError('La materia no estaba asociada al profesor', 404);
+            }
+
+            await tx.disponibilidad.deleteMany({
+                where: { id_profesor, id_materia }
+            });
+
             return { message: 'Materia desasociada' };
-        } catch (error) {
-            throw new AppError('La materia no estaba asociada al profesor', 404);
-        }
+        });
     }
 }
