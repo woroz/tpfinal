@@ -1,12 +1,15 @@
 import { prisma } from '../utils/prisma.js';
 import { AppError } from '../utils/error.js';
 import type { Role } from '../generated/prisma/client.js'
+import { verificarImagen } from '../utils/moderacion.js'
+import { put, del } from '@vercel/blob'
+
+const TIPOS_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp']
 
 export const perfilService = {
-    actualizarPerfil: async (id_usuario: string, rol: Role, datos: {
+    async actualizarPerfil (id_usuario: string, rol: Role, datos: {
         nombre?: string;
         biografia?: string;
-        avatarURL?: string;
         visibilidad?: 'publico' | 'privado';
         //alumno
         nivel_educativo?: string;
@@ -17,7 +20,7 @@ export const perfilService = {
         descripcion?: string;
         longitud_prof?: number;
         latitud_prof?: number;
-    }) => {
+    }) {
         if (datos.nombre !== undefined) {
             await prisma.usuario.update({
                 where : { id_usuario: id_usuario },
@@ -25,12 +28,11 @@ export const perfilService = {
             })
         }
         
-        if (datos.biografia !== undefined || datos.avatarURL !== undefined || datos.visibilidad !== undefined) {
+        if (datos.biografia !== undefined || datos.visibilidad !== undefined) {
             await prisma.perfil.update({
                 where: { id_usuario: id_usuario },
                 data: {
                     ...(datos.biografia !== undefined && { biografia: datos.biografia }),
-                    ...(datos.avatarURL !== undefined && { avatarURL: datos.avatarURL }),
                     ...(datos.visibilidad !== undefined && { visibilidad: datos.visibilidad })
                 }
             });
@@ -71,9 +73,49 @@ export const perfilService = {
         return await perfilService.obtenerPerfil(id_usuario)
     },
 
-    
+    async actualizarAvatar(id_usuario: string, file: Express.Multer.File) {
+        if (!TIPOS_PERMITIDOS.includes(file.mimetype)) {
+            throw new AppError('Formato no permitido (usa jpg, png o webp)', 400)
+        }
+        const validacionAvatar = await verificarImagen(file.buffer, file.mimetype);
 
-    obtenerPerfil: async (id_usuario: string) => {
+        if (!validacionAvatar) {
+            throw new AppError('El avatar contiene contenido inapropiado', 400);
+        }
+
+        const perfilActual = await prisma.perfil.findUnique({
+            where: { id_usuario },
+            select: { avatarURL: true }
+        })
+        const type = file.mimetype.split('/')[1]
+
+        const blob = await put(`avatars/${id_usuario}/avatar.${type}`, file.buffer, {
+            access: 'public',
+            contentType: file.mimetype,
+            addRandomSuffix: true,
+        })
+
+        try {
+            await prisma.perfil.update({
+                where: { id_usuario },
+                data: { avatarURL: blob.url }
+            })
+        } catch (error) {
+            await del(blob.url)
+            throw error
+        }
+
+        if (perfilActual?.avatarURL) {
+            try {
+                await del(perfilActual.avatarURL)
+            } catch (error) {
+                console.error('Error al eliminar el avatar anterior:', error)
+            }
+        }
+        return await perfilService.obtenerPerfil(id_usuario)
+    },
+
+    async obtenerPerfil (id_usuario: string) {
         const usuario = await prisma.usuario.findUnique({
             where: { id_usuario: id_usuario },
             include: {
