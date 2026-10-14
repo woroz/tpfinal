@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { auth } from '../middlewares/authMiddleware.js'; 
 import { obtenerTokenService } from '../services/salaVideoLlamadaService.js';
+import { finalizarSalaService } from '../services/salaVideoLlamadaService.js';
 
 const router = Router();
 
@@ -21,6 +22,16 @@ router.get('/token/:id_clase', auth(), async (req: Request, res: Response, next:
   try {
     const dataSala = await obtenerTokenService(id_clase as string, id_usuario, nombre_usuario);
     return res.status(200).json(dataSala);
+  } catch (error: any) {
+    return res.status(400).json({ error: error.message });
+  }
+});
+
+router.delete('/finalizar/:nombre_sala', auth(['profesor']), async (req: Request, res: Response) => {
+  const { nombre_sala } = req.params;
+  try {
+    const resultado = await finalizarSalaService(nombre_sala as string);
+    return res.status(200).json(resultado);
   } catch (error: any) {
     return res.status(400).json({ error: error.message });
   }
