@@ -49,5 +49,9 @@ export const config = {
         retencionMin: numberEnv('RESERVA_RETENCION_MIN', 15),
         diasMaximos: 60,
         zonaOffsetMin: -180
+    },
+    Groq: {
+        GROP_API_KEY: requireEnv('GROP_API_KEY'),
+        GROQ_MODEL: requireEnv('GROQ_MODEL')
     }
 }
