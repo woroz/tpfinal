@@ -6,6 +6,7 @@ import { historialQuerySchema } from '../schemas/reservaSchema.js';
 import { obtenerIdRol, validar } from '../utils/validar.js';
 import { buscarClaseSchema } from '../schemas/claseSchema.js';
 import { validate } from '../middlewares/validateMiddleware.js';
+import { getHistorialChatByClase } from '../services/mensajeService.js';
  
 const router = Router();
  
@@ -82,6 +83,22 @@ router.post('/buscar', auth(['alumno']), validate(buscarClaseSchema), async (req
         next(error);
     }
 })
+
+router.get('/:id_clase/mensajes', auth(['profesor', 'alumno']), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const id_clase = String(req.params.id_clase);
+        const mensajes = await getHistorialChatByClase(id_clase);
+        if (!mensajes) {
+            throw new AppError('La clase no existe', 404);
+        }
+        res.status(200).json({ 
+            success: true,
+            mensajes 
+        });
+    } catch (error) {
+        next(error);
+    }
+});
  
 export default router;
  

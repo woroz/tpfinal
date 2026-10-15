@@ -1,16 +1,18 @@
 import { AccessToken } from 'livekit-server-sdk';
+import { RoomServiceClient } from 'livekit-server-sdk';
 import { prisma } from '../utils/prisma.js';
 
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || '';
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || '';
 const LIVEKIT_URL = process.env.LIVEKIT_URL || '';
 
-export const obtenerTokenService = async (id_clase: string, id_usuario: string, nombre_usuario: string) => {
+const roomService = new RoomServiceClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
 
+
+export const obtenerTokenService = async (id_clase: string, id_usuario: string, nombre_usuario: string) => {
   const clase = await prisma.clase.findUnique({
     where: { id_clase }
   });
-
   if (!clase) {
     throw new Error('La clase especificada no existe.');
   }
@@ -38,12 +40,10 @@ export const obtenerTokenService = async (id_clase: string, id_usuario: string, 
       }
     });
   }
-
   const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
     identity: id_usuario,
     name: nombre_usuario,
   });
-
   at.addGrant({
     roomJoin: true,
     room: sala.nombre_sala,
@@ -58,4 +58,13 @@ export const obtenerTokenService = async (id_clase: string, id_usuario: string, 
     nombre_sala: sala.nombre_sala,
     url_servidor: LIVEKIT_URL
   };
+};
+
+export const finalizarSalaService = async (nombre_sala: string) => {
+  try {
+    await roomService.deleteRoom(nombre_sala);
+    return { message: "Sala finalizada correctamente en el servidor." };
+  } catch (error) {
+    throw new Error("No se pudo cerrar la sala en el servidor de LiveKit.");
+  }
 };
