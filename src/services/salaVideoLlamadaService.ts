@@ -1,20 +1,42 @@
 import { AccessToken } from 'livekit-server-sdk';
 import { RoomServiceClient } from 'livekit-server-sdk';
 import { prisma } from '../utils/prisma.js';
+import { AppError } from '../utils/error.js';
 
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || '';
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || '';
 const LIVEKIT_URL = process.env.LIVEKIT_URL || '';
 
 const roomService = new RoomServiceClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
-
-
-export const obtenerTokenService = async (id_clase: string, id_usuario: string, nombre_usuario: string) => {
+export const obtenerTokenService = async (id_clase: string, id_usuario: string, nombre_usuario: string,
+  rol: string, id_rol?: string
+) => {
   const clase = await prisma.clase.findUnique({
     where: { id_clase }
   });
-  if (!clase) {
-    throw new Error('La clase especificada no existe.');
+
+  if (!clase) throw new AppError('La clase especificada no existe.', 404);
+
+  if (rol === 'profesor') {
+    if (!id_rol || clase.id_profesor !== id_rol) {
+      throw new AppError('No sos el profesor de esta clase', 403);
+    }
+  } else if (rol === 'alumno') {
+    if (!id_rol) throw new AppError('Alumno no identificado', 403);
+
+    const inscripcion = await prisma.inscripcion.findFirst({
+      where: { id_clase, id_alumno: id_rol },
+    });
+    if (!inscripcion) throw new AppError('No estás inscripto en esta clase', 403);
+
+    if (!inscripcion.asistio) {
+      await prisma.inscripcion.update({
+        where: { id_inscripcion: inscripcion.id_inscripcion },
+        data: { asistio: true },
+      });
+    }
+  } else {
+    throw new AppError('No tenés permiso para esta clase', 403);
   }
 
   //const ahora = new Date();
@@ -26,20 +48,17 @@ export const obtenerTokenService = async (id_clase: string, id_usuario: string, 
     throw new Error('La videollamada no está disponible en este momento.');
   }*/
 
-  let sala = await prisma.salaVideollamada.findFirst({
-    where: { id_clase }
+ const sala = await prisma.salaVideollamada.upsert({
+    where: { id_clase },
+    update: {},
+    create: {
+      estado: 'activa',
+      habilitada_desde: inicio,
+      id_clase,
+      nombre_sala: `sala-${id_clase.substring(0, 8)}`,
+    },
   });
 
-  if (!sala) {
-    sala = await prisma.salaVideollamada.create({
-      data: {
-        estado: 'activa',
-        habilitada_desde: inicio,
-        id_clase: id_clase,
-        nombre_sala: `sala-${id_clase.substring(0, 8)}`
-      }
-    });
-  }
   const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
     identity: id_usuario,
     name: nombre_usuario,
