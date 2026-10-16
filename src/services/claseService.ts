@@ -127,7 +127,7 @@ export const claseService = {
       where: {
         id_profesor: idProfesor,
         estado: { in: [ESTADO_CLASE.confirmada, ESTADO_CLASE.disponible] },
-        ...(historial ? {} : { fecha_hora_fin: { gte: new Date() } })
+        fecha_hora_fin: historial ? { lt: new Date() } : { gte: new Date() }
       },
       include: {
         materia: true,

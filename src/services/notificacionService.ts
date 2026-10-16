@@ -1,5 +1,8 @@
 import nodemailer from 'nodemailer'
 import { prisma } from '../utils/prisma.js'
+import type { Prisma } from '../generated/prisma/client.js'
+
+type Tx = Prisma.TransactionClient
 
 const transporte = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
@@ -42,6 +45,30 @@ async function crearNotificacionParaInscripcion(
 }
 
 export const notificacionService = {
+  async resenaNueva(tx: Tx, idProfesor: string, idAlumno: string, puntaje: number) {
+    const profesor = await tx.profesor.findUnique({
+      where: { id_profesor: idProfesor },
+      select: { usuario: { select: { id_usuario: true } } }
+    })
+    const alumno = await tx.alumno.findUnique({
+      where: { id_alumno: idAlumno },
+      select: { usuario: { select: { nombre: true } } }
+    })
+
+    if (!profesor || !alumno) {
+      throw new Error('No se pudo encontrar al profesor o al alumno para notificar la reseña')
+    }
+
+    await tx.notificacion.create({
+      data: {
+        id_usuario: profesor.usuario.id_usuario,
+        tipo: 'resena_nueva',
+        titulo: 'Nueva reseña recibida',
+        mensaje: `${alumno.usuario.nombre} dejó una reseña de ${puntaje} de 5 en tu perfil.`
+      }
+    })
+  },
+
   async listar(idUsuario: string) {
     return prisma.notificacion.findMany({
       where: { id_usuario: idUsuario },

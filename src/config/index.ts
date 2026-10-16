@@ -51,7 +51,7 @@ export const config = {
         zonaOffsetMin: -180
     },
     Groq: {
-        GROP_API_KEY: requireEnv('GROP_API_KEY'),
+        GROP_API_KEY: requireEnv('GROQ_API_KEY'),
         GROQ_MODEL: requireEnv('GROQ_MODEL')
     }
 }
