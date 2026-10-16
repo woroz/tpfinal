@@ -11,10 +11,12 @@ import materiaRoutes from './materiaRoutes.js';
 import areaRoutes from './areaRoutes.js';
 import salaVideoLlamadaRoutes from './salaVideoLlamadaRoutes.js';
 import transcripcion from './transcripcionRoutes.js'
+import actividadAlumnoRoutes from './actividadAlumnoRoutes.js'
 
 const router = Router()
 
 router.use('/transcripcion', transcripcion);
+router.use('/actividad-alumno', actividadAlumnoRoutes);
 router.use('/clases', claseRoutes);
 router.use('/auth', authRouter)
 router.use('/profesores', profesorRoutes)

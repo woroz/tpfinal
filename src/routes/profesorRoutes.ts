@@ -6,7 +6,8 @@ import { asociarMateriaSchema } from '../schemas/materiaSchema.js';
 import { profesorService } from '../services/profesorService.js';
 import { horarioService } from '../services/horarioService.js'
 import { horariosQuerySchema, idParamSchema } from '../schemas/reservaSchema.js'
-import { validar } from '../utils/validar.js'
+import { crearResenaSchema } from '../schemas/resenaSchema.js'
+import { obtenerIdRol, validar } from '../utils/validar.js'
 import { AppError } from '../utils/error.js';
 
 const router = Router();
@@ -134,6 +135,18 @@ router.get('/:id/resenas', auth(['alumno', 'profesor', 'admin']), async (req: Re
     }
   }
 )
+
+router.post('/:id/resenas', auth(['alumno']), validate(crearResenaSchema), async (req: Request, res: Response) => {
+    const { id } = validar(idParamSchema, req.params)
+    const resena = await profesorService.crearResena(id, obtenerIdRol(req), req.body)
+    res.status(201).json({ message: 'Reseña registrada correctamente', resena })
+})
+
+router.patch('/:id/resenas', auth(['alumno']), validate(crearResenaSchema), async (req: Request, res: Response) => {
+    const { id } = validar(idParamSchema, req.params)
+    const resena = await profesorService.actualizarResena(id, obtenerIdRol(req), req.body)
+    res.status(200).json({ message: 'Reseña actualizada correctamente', resena })
+})
 
 router.get('/:id/disponibilidad', auth(['alumno', 'profesor', 'admin']), async (req: Request, res: Response, next: NextFunction) => {
     try {

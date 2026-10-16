@@ -29,27 +29,58 @@ type DatosReserva = ReservaParticular | ReservaClaseProgramada
 
 const MS_MINUTO = 60_000
 
-const incluirDetalle = {
-    clase: {
-        include: {
-            materia: true,
-            archivosPdf: { orderBy: { fecha_carga: 'asc' } },
-            profesor: { include: { usuario: { select: { nombre: true } } } }
-        }
-    },
-    pago: true
-} satisfies Prisma.InscripcionInclude
+function incluirDetalle(idAlumno?: string) {
+    return {
+        clase: {
+            include: {
+                materia: true,
+                archivosPdf: { orderBy: { fecha_carga: 'asc' } },
+                ...(idAlumno
+                    ? {
+                        registrosActividad: {
+                            where: { id_alumno: idAlumno },
+                            orderBy: { createdAt: 'desc' }
+                        }
+                    }
+                    : {}),
+                profesor: {
+                    include: {
+                        usuario: { select: { nombre: true } },
+                        ...(idAlumno
+                            ? {
+                                resenas: {
+                                    where: { id_alumno: idAlumno },
+                                    select: {
+                                        id_resena: true,
+                                        id_clase: true,
+                                        puntaje: true,
+                                        comentario: true
+                                    }
+                                }
+                            }
+                            : {})
+                    }
+                }
+            }
+        },
+        pago: true
+    } satisfies Prisma.InscripcionInclude
+}
 
-type InscripcionDetalle = Prisma.InscripcionGetPayload<{ include: typeof incluirDetalle }>
+type InscripcionDetalle = Prisma.InscripcionGetPayload<{ include: ReturnType<typeof incluirDetalle> }>
 
 function aDto(inscripcion: InscripcionDetalle) {
     const expirada = inscripcion.estado === ESTADO_INSCRIPCION.pendientePago
         && inscripcion.expiraEn !== null
         && inscripcion.expiraEn <= new Date()
+    const resena = 'resenas' in inscripcion.clase.profesor
+        ? inscripcion.clase.profesor.resenas[0] ?? null
+        : null
 
     return {
         id_inscripcion: inscripcion.id_inscripcion,
         estado: expirada ? 'expirada' : inscripcion.estado,
+        asistio: inscripcion.asistio,
         expira_en: inscripcion.expiraEn,
         clase: {
             id_clase: inscripcion.clase.id_clase,
@@ -65,11 +96,23 @@ function aDto(inscripcion: InscripcionDetalle) {
             materia: inscripcion.clase.materia.nombreMateria,
             inicio: inscripcion.clase.fecha_hora_inicio,
             fin: inscripcion.clase.fecha_hora_fin,
-            precio: inscripcion.clase.precio ?? 0
+            precio: inscripcion.clase.precio ?? 0,
+            registrosActividad: 'registrosActividad' in inscripcion.clase
+                ? inscripcion.clase.registrosActividad.map((registro) => ({
+                    id_registro: registro.id_registro,
+                    actividad: registro.actividad,
+                    calificacion: registro.calificacion,
+                    nota: registro.nota,
+                    createdAt: registro.createdAt,
+                    updatedAt: registro.updatedAt
+                }))
+                : []
         },
         profesor: {
             id_profesor: inscripcion.clase.id_profesor,
-            nombre: inscripcion.clase.profesor.usuario.nombre
+            nombre: inscripcion.clase.profesor.usuario.nombre,
+            resenaHecha: resena !== null,
+            resena
         },
         pago: inscripcion.pago
             ? {
@@ -111,7 +154,7 @@ async function liberarReserva(idInscripcion: string, idClase: string): Promise<v
 async function obtenerDetalle(idInscripcion: string) {
     const inscripcion = await prisma.inscripcion.findUnique({
         where: { id_inscripcion: idInscripcion },
-        include: incluirDetalle
+        include: incluirDetalle()
     })
     if (!inscripcion) throw new AppError('Reserva no encontrada', 404)
     return aDto(inscripcion)
@@ -648,7 +691,7 @@ export const inscripcionService = {
     async obtener(idAlumno: string, idInscripcion: string) {
         const inscripcion = await prisma.inscripcion.findFirst({
             where: { id_inscripcion: idInscripcion, id_alumno: idAlumno },
-            include: incluirDetalle
+            include: incluirDetalle(idAlumno)
         })
         if (!inscripcion) throw new AppError('Reserva no encontrada', 404)
         return aDto(inscripcion)
@@ -667,7 +710,7 @@ export const inscripcionService = {
                         { estado: ESTADO_INSCRIPCION.pendientePago, expiraEn: { gt: ahora } }
                     ]
                 },
-            include: incluirDetalle,
+            include: incluirDetalle(idAlumno),
             orderBy: { clase: { fecha_hora_inicio: historial ? 'desc' : 'asc' } }
         })
         return inscripciones.map(aDto)

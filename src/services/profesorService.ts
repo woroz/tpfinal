@@ -3,6 +3,7 @@ import { AppError } from '../utils/error.js';
 import { Prisma } from '../generated/prisma/client.js'
 import { ESTADO_CLASE, ESTADO_INSCRIPCION } from '../utils/estados.js'
 import { minutosAHora } from '../utils/fechas.js'
+import { notificacionService } from './notificacionService.js'
 
 export const profesorService = {
     buscarProfesores: async (filtros: {
@@ -186,6 +187,99 @@ export const profesorService = {
             ...clase,
             cuposDisponibles: Math.max(clase.cupo_maximo - inscripciones.length, 0)
         }))
+    },
+
+    crearResena: async (
+        id_profesor: string,
+        id_alumno: string,
+        datos: { id_clase: string; puntaje: number; comentario?: string }
+    ) => {
+        const inscripcion = await prisma.inscripcion.findFirst({
+            where: {
+                id_alumno,
+                estado: ESTADO_INSCRIPCION.confirmada,
+                asistio: true,
+                clase: {
+                    id_clase: datos.id_clase,
+                    id_profesor,
+                    estado: { not: ESTADO_CLASE.cancelada },
+                    fecha_hora_fin: { lte: new Date() }
+                }
+            },
+            select: { id_clase: true }
+        })
+
+        if (!inscripcion) {
+            throw new AppError('Solo podes reseñar una clase confirmada, no cancelada y ya finalizada', 403)
+        }
+
+        const resenaExistente = await prisma.resena.findFirst({
+            where: { id_alumno, id_profesor },
+            select: { id_resena: true }
+        })
+        if (resenaExistente) {
+            throw new AppError('Ya dejaste una reseña para este profesor', 409)
+        }
+
+        try {
+            return await prisma.$transaction(async (tx) => {
+                const resena = await tx.resena.create({
+                    data: {
+                        id_clase: inscripcion.id_clase,
+                        id_alumno,
+                        id_profesor,
+                        puntaje: datos.puntaje,
+                        comentario: datos.comentario || null
+                    }
+                })
+                await notificacionService.resenaNueva(tx, id_profesor, id_alumno, datos.puntaje)
+                return resena
+            })
+        } catch (error) {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+                throw new AppError('Ya dejaste una reseña para este profesor', 409)
+            }
+            throw error
+        }
+    },
+
+    actualizarResena: async (
+        id_profesor: string,
+        id_alumno: string,
+        datos: { id_clase: string; puntaje: number; comentario?: string }
+    ) => {
+        const resena = await prisma.resena.findFirst({
+            where: { id_alumno, id_profesor },
+            select: { id_resena: true, id_clase: true }
+        })
+        if (!resena) {
+            throw new AppError('No encontramos una reseña tuya para este profesor', 404)
+        }
+
+        const inscripcion = await prisma.inscripcion.findFirst({
+            where: {
+                id_alumno,
+                id_clase: resena.id_clase,
+                estado: ESTADO_INSCRIPCION.confirmada,
+                clase: {
+                    id_profesor,
+                    estado: { not: ESTADO_CLASE.cancelada },
+                    fecha_hora_fin: { lte: new Date() }
+                }
+            },
+            select: { id_clase: true }
+        })
+        if (!inscripcion) {
+            throw new AppError('Solo podes modificar la reseña de una clase confirmada y ya finalizada', 403)
+        }
+
+        return prisma.resena.update({
+            where: { id_resena: resena.id_resena },
+            data: {
+                puntaje: datos.puntaje,
+                comentario: datos.comentario || null
+            }
+        })
     },
 
     obtenerResenas: async (id_profesor: string) => {

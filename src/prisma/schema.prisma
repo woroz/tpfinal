@@ -39,6 +39,7 @@ model Profesor {
   usuario            Usuario             @relation(fields: [id_usuario], references: [id_usuario])
   resenas            Resena[]
   calificaciones     calificacion[]
+  registrosActividad RegistroActividadAlumno[]
   materialesCargados materialDidactico[]
   ofertas            ofertaSolicitud[]
   materias           profesorMateria[]
@@ -70,6 +71,7 @@ model Alumno {
   solicitudes      SolicitudClase[]
   tareasAsignadas  TareaAlumno[]
   calificaciones   calificacion[]
+  registrosActividad RegistroActividadAlumno[]
   intentosQuiz     intentoQuiz[]
   materialRecibido materialAlumno[]
   reclamos         reclamo[]
@@ -136,6 +138,7 @@ model Clase {
   recordatorios    Recordatorio[]
   resenas          Resena[]
   calificaciones   calificacion[]
+  registrosActividad RegistroActividadAlumno[]
   grabacion        grabacion?
   materiales       materialDidactico[]
   mensajes         mensaje[]
@@ -170,13 +173,14 @@ model Resena {
   id_clase    String
   id_alumno   String
   id_profesor String
-  puntaje     Int
+  puntaje     Float
   comentario  String?
   createdAt   DateTime @default(now())
   alumno      Alumno   @relation(fields: [id_alumno], references: [id_alumno])
   clase       Clase    @relation(fields: [id_clase], references: [id_clase])
   profesor    Profesor @relation(fields: [id_profesor], references: [id_profesor])
 
+  @@unique([id_alumno, id_profesor])
   @@map("Reseña")
 }
 
@@ -441,6 +445,24 @@ model calificacion {
   clase           Clase    @relation(fields: [id_clase], references: [id_clase])
   profesor        Profesor @relation(fields: [id_profesor], references: [id_profesor])
   tarea           tarea    @relation(fields: [id_tarea], references: [id_tarea])
+}
+
+model RegistroActividadAlumno {
+  id_registro  String   @id @default(uuid())
+  id_alumno    String
+  id_clase     String
+  id_profesor  String
+  actividad    String?
+  calificacion Float?
+  nota         String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  alumno       Alumno   @relation(fields: [id_alumno], references: [id_alumno])
+  clase        Clase    @relation(fields: [id_clase], references: [id_clase])
+  profesor     Profesor @relation(fields: [id_profesor], references: [id_profesor])
+
+  @@index([id_alumno, createdAt])
+  @@index([id_clase, id_alumno])
 }
 
 model TareaAlumno {
