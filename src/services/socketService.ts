@@ -50,36 +50,17 @@ export const initSocketService = (io: Server) => {
       }
     });
 
-     /*socket.on('marcar_mensajes_leidos', async (data: { id_clase: string; id_usuario: string }) => {
-      const { id_clase, id_usuario } = data;
-      try {
-        await marcarMensajesComoLeidos(id_clase, id_usuario);
-        io.to(id_clase).emit('mensajes_leidos_actualizados', { 
-          id_clase, 
-          por_usuario: id_usuario 
-        });
-      } catch (error) {
-        console.error('Error al actualizar vistos en tiempo real:', error);
-      }
-    });*/
-
     socket.on('marcar_mensajes_leidos', async (data: { id_clase: string; id_usuario: string }) => {
-      const { id_clase, id_usuario } = data;
-      console.log(`[SOCKET] -> Evento 'marcar_mensajes_leidos' recibido de usuario: ${id_usuario} para clase: ${id_clase}`);
-      
+      const { id_clase, id_usuario } = data;      
       try {
-        // 1. Forzamos un log antes de llamar al servicio para auditar el comportamiento
         await marcarMensajesComoLeidos(id_clase, id_usuario);
-        console.log(`[DATABASE] -> Mensajes de la clase ${id_clase} marcados como leídos por el usuario ${id_usuario}`);
-        
-        // 2. Transmitimos el cambio a TODA la sala
-        console.log(`[SOCKET] -> Emitiendo 'mensajes_leidos_actualizados' a la sala: ${id_clase}`);
+        // Transmitimos el cambio a TODO el chat
         io.to(id_clase).emit('mensajes_leidos_actualizados', { 
           id_clase, 
           por_usuario: id_usuario 
         });
       } catch (error) {
-        console.error('[SOCKET ERROR] -> Error al actualizar vistos:', error);
+        console.error('Error al actualizar vistos:', error);
       }
     });
 
