@@ -15,8 +15,8 @@ export const claseService = {
     fecha_hora_fin: string | Date;
     cupo_maximo: number;
     precio?: number;
-    tipo: string;      
-    origen: string;    
+    tipo: string;
+    origen: string;
   }) {
     const inicio = new Date(datos.fecha_hora_inicio);
     const fin = new Date(datos.fecha_hora_fin);
@@ -57,14 +57,13 @@ export const claseService = {
         fecha_hora_fin: fin,
         cupo_maximo: datos.cupo_maximo,
         precio: datos.precio || 0,
-        tipo: datos.tipo,     
-        origen: datos.origen, 
+        tipo: datos.tipo,
+        origen: datos.origen,
         estado: ESTADO_CLASE.disponible
       }
     });
   },
 
-  // El profesor cambia el horario de una clase y se avisa por mail a los alumnos inscriptos.
   async cambiarHorario(idProfesor: string, idClase: string, nuevoInicio: string | Date, nuevoFin: string | Date) {
     const clase = await prisma.clase.findUnique({ where: { id_clase: idClase } });
     if (!clase || clase.id_profesor !== idProfesor) {
@@ -114,7 +113,6 @@ export const claseService = {
       try {
         await avisoHorarioService.avisarCambioHorario(idClase, anterior);
       } catch (error) {
-        // Si falla el mail, el cambio de horario igual queda guardado.
         console.error('Error al avisar el cambio de horario', error);
       }
     }
@@ -178,6 +176,21 @@ export const claseService = {
     if (!consultaNormalizada) {
       throw new AppError('Ingresa una materia o tema para buscar clases.', 400);
     }
+
+    const tokens = consultaNormalizada.split(' ').filter(Boolean);
+
+    const filtroTexto = Prisma.join(
+      tokens.map((token) => {
+        const patron = `%${token}%`;
+        return Prisma.sql`(
+          translate(lower(c.titulo), 'áéíóúüñ', 'aeiouun') LIKE ${patron}
+          OR translate(lower(c.tema), 'áéíóúüñ', 'aeiouun') LIKE ${patron}
+          OR translate(lower(m."nombreMateria"), 'áéíóúüñ', 'aeiouun') LIKE ${patron}
+          OR translate(lower(ac."nombreArea"), 'áéíóúüñ', 'aeiouun') LIKE ${patron}
+        )`;
+      }),
+      ' AND '
+    );
 
     const distancia = Prisma.sql`(
       6371 * acos(LEAST(1, GREATEST(-1,
@@ -261,12 +274,7 @@ export const claseService = {
         AND p.latitud_prof IS NOT NULL
         AND p.longitud_prof IS NOT NULL
         AND ${distancia} <= ${radio}
-        AND (
-          translate(lower(c.titulo), 'áéíóúüñ', 'aeiouun') LIKE '%' || ${consultaNormalizada} || '%'
-          OR translate(lower(c.tema), 'áéíóúüñ', 'aeiouun') LIKE '%' || ${consultaNormalizada} || '%'
-          OR translate(lower(m."nombreMateria"), 'áéíóúüñ', 'aeiouun') LIKE '%' || ${consultaNormalizada} || '%'
-          OR translate(lower(ac."nombreArea"), 'áéíóúüñ', 'aeiouun') LIKE '%' || ${consultaNormalizada} || '%'
-        )
+        AND (${filtroTexto})
       ORDER BY relevancia DESC, distancia_km ASC, c.fecha_hora_inicio ASC
       LIMIT 50
     `;
