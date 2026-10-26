@@ -114,6 +114,10 @@ export const authService = {
             }
         })
         if (!user) throw new AppError('Credenciales invalidas', 401)
+
+        if (!user.contrasena) {
+            throw new AppError('Esta cuenta usa inicio de sesion con Google', 401)
+        }
         
         const validarPassword = await verifyPassword(user.contrasena, password)
         if (!validarPassword) throw new AppError('Credenciales invalidas', 401)

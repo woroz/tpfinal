@@ -11,10 +11,11 @@ model Usuario {
   id_usuario          String          @id @default(uuid())
   nombre              String
   email               String          @unique
-  contrasena          String          @map("contraseña")
+  contrasena          String?         @map("contraseña")
   rol                 Role
   createdAt           DateTime        @default(now())
   updateAt            DateTime        @updatedAt
+  googleId            String?         @unique
   alumno              Alumno?
   logrosObtenidos     LogroObtenido[]
   notificaciones      Notificacion[]
@@ -28,18 +29,18 @@ model Usuario {
 }
 
 model Profesor {
-  id_profesor        String              @id @default(uuid())
+  id_profesor        String                    @id @default(uuid())
   tarifa             Int?
   descripcion        String?
-  id_usuario         String              @unique
+  id_usuario         String                    @unique
   latitud_prof       Float?
   longitud_prof      Float?
   clases             Clase[]
   disponibilidad     Disponibilidad[]
-  usuario            Usuario             @relation(fields: [id_usuario], references: [id_usuario])
+  usuario            Usuario                   @relation(fields: [id_usuario], references: [id_usuario])
+  registrosActividad RegistroActividadAlumno[]
   resenas            Resena[]
   calificaciones     calificacion[]
-  registrosActividad RegistroActividadAlumno[]
   materialesCargados materialDidactico[]
   ofertas            ofertaSolicitud[]
   materias           profesorMateria[]
@@ -60,21 +61,21 @@ model Disponibilidad {
 }
 
 model Alumno {
-  id_alumno        String           @id @default(uuid())
-  nivel_educativo  String?
-  longitud_alum    Float?
-  latitud_alum     Float?
-  id_usuario       String           @unique
-  usuario          Usuario          @relation(fields: [id_usuario], references: [id_usuario])
-  inscripciones    Inscripcion[]
-  resenas          Resena[]
-  solicitudes      SolicitudClase[]
-  tareasAsignadas  TareaAlumno[]
-  calificaciones   calificacion[]
+  id_alumno          String                    @id @default(uuid())
+  nivel_educativo    String?
+  longitud_alum      Float?
+  latitud_alum       Float?
+  id_usuario         String                    @unique
+  usuario            Usuario                   @relation(fields: [id_usuario], references: [id_usuario])
+  inscripciones      Inscripcion[]
   registrosActividad RegistroActividadAlumno[]
-  intentosQuiz     intentoQuiz[]
-  materialRecibido materialAlumno[]
-  reclamos         reclamo[]
+  resenas            Resena[]
+  solicitudes        SolicitudClase[]
+  tareasAsignadas    TareaAlumno[]
+  calificaciones     calificacion[]
+  intentosQuiz       intentoQuiz[]
+  materialRecibido   materialAlumno[]
+  reclamos           reclamo[]
 }
 
 model Perfil {
@@ -103,6 +104,7 @@ model materia {
   areaConocimiento     areaConocimiento   @relation(fields: [id_area_conocimiento], references: [id_area])
   profesores           profesorMateria[]
   solicitudMateria     solicitudMateria[]
+  ofertas              ofertaSolicitud[]
 }
 
 model profesorMateria {
@@ -113,41 +115,41 @@ model profesorMateria {
 
   @@id([id_materia, id_profesor])
 }
-model Clase {
-  id_clase          String   @id @default(uuid())
-  id_profesor       String
-  id_materia        String
-  titulo            String
-  tema              String
-  contenido         String?  @db.Text
-  materialNombre    String?
-  materialUrl       String?
-  archivosPdf       materialClase[]
-  fecha_hora_inicio DateTime
-  fecha_hora_fin    DateTime
-  cupo_maximo       Int
-  precio            Float?
-  tipo              String
-  origen            String
-  estado            String
 
-  materia          materia             @relation(fields: [id_materia], references: [id_materia])
-  profesor         Profesor            @relation(fields: [id_profesor], references: [id_profesor])
-  inscripciones    Inscripcion[]
-  notificaciones   Notificacion[]
-  recordatorios    Recordatorio[]
-  resenas          Resena[]
-  calificaciones   calificacion[]
+model Clase {
+  id_clase           String                    @id @default(uuid())
+  id_profesor        String
+  id_materia         String
+  titulo             String
+  tema               String
+  fecha_hora_inicio  DateTime
+  fecha_hora_fin     DateTime
+  cupo_maximo        Int
+  precio             Float?
+  tipo               String
+  origen             String
+  estado             String
+  contenido          String?
+  materialNombre     String?
+  materialUrl        String?
+  materia            materia                   @relation(fields: [id_materia], references: [id_materia])
+  profesor           Profesor                  @relation(fields: [id_profesor], references: [id_profesor])
+  inscripciones      Inscripcion[]
+  notificaciones     Notificacion[]
+  recordatorios      Recordatorio[]
   registrosActividad RegistroActividadAlumno[]
-  grabacion        grabacion?
-  materiales       materialDidactico[]
-  mensajes         mensaje[]
-  ofertas          ofertaSolicitud[]
-  quizzes          quiz[]
-  reclamos         reclamo[]
-  salaVideollamada salaVideollamada?
-  tareas           tarea[]
-  transcripcion    transcripcion?
+  resenas            Resena[]
+  calificaciones     calificacion[]
+  grabacion          grabacion?
+  archivosPdf        materialClase[]
+  materiales         materialDidactico[]
+  mensajes           mensaje[]
+  ofertas            ofertaSolicitud[]
+  quizzes            quiz[]
+  reclamos           reclamo[]
+  salaVideollamada   salaVideollamada?
+  tareas             tarea[]
+  transcripcion      transcripcion?
 
   @@index([id_profesor, fecha_hora_inicio])
 }
@@ -236,17 +238,29 @@ model SolicitudClase {
 }
 
 model ofertaSolicitud {
-  id_oferta    String         @id @default(uuid())
-  id_solicitud String
-  id_profesor  String
-  id_clase     String
-  mensaje      String?
-  estado       String
-  createdAt    DateTime       @default(now())
-  clase        Clase          @relation(fields: [id_clase], references: [id_clase])
-  profesor     Profesor       @relation(fields: [id_profesor], references: [id_profesor])
-  solicitud    SolicitudClase @relation(fields: [id_solicitud], references: [id_solicitud])
+  id_oferta         String         @id @default(uuid())
+  id_solicitud      String
+  id_profesor       String
+  id_clase          String?
+  id_materia        String
+  mensaje           String?
+  precio            Int
+  fecha_hora_inicio DateTime
+  fecha_hora_fin    DateTime
+  materialNombre    String?
+  materialUrl       String?
+  estado            String
+  createdAt         DateTime       @default(now())
+  
+  clase             Clase?         @relation(fields: [id_clase], references: [id_clase]) // <-- Ahora es opcional
+  materia           materia        @relation(fields: [id_materia], references: [id_materia])
+  profesor          Profesor       @relation(fields: [id_profesor], references: [id_profesor])
+  solicitud         SolicitudClase @relation(fields: [id_solicitud], references: [id_solicitud])
+
+  @@unique([id_solicitud, id_profesor])
+  @@index([id_profesor])
 }
+
 
 model solicitudMateria {
   id_solicitud String
@@ -454,7 +468,7 @@ model RegistroActividadAlumno {
   id_profesor  String
   actividad    String?
   calificacion Float?
-  nota         String?  @db.Text
+  nota         String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   alumno       Alumno   @relation(fields: [id_alumno], references: [id_alumno])
