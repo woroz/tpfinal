@@ -2,12 +2,14 @@ import { AccessToken } from 'livekit-server-sdk';
 import { RoomServiceClient } from 'livekit-server-sdk';
 import { prisma } from '../utils/prisma.js';
 import { AppError } from '../utils/error.js';
+import { ESTADO_CLASE, ESTADO_INSCRIPCION } from '../utils/estados.js';
 
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || '';
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || '';
 const LIVEKIT_URL = process.env.LIVEKIT_URL || '';
 
 const roomService = new RoomServiceClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
+
 export const obtenerTokenService = async (id_clase: string, id_usuario: string, nombre_usuario: string,
   rol: string, id_rol?: string
 ) => {
@@ -24,8 +26,18 @@ export const obtenerTokenService = async (id_clase: string, id_usuario: string, 
   } else if (rol === 'alumno') {
     if (!id_rol) throw new AppError('Alumno no identificado', 403);
 
+    const ahora = new Date();
+    const inicioVentana = new Date(clase.fecha_hora_inicio.getTime() - 10 * 60 * 1000);
+
+    if (clase.estado === ESTADO_CLASE.cancelada) {
+      throw new AppError('La clase fue cancelada', 409);
+    }
+    if (ahora < inicioVentana || ahora > clase.fecha_hora_fin) {
+      throw new AppError('La videollamada no esta disponible en este momento.', 403);
+    }
+
     const inscripcion = await prisma.inscripcion.findFirst({
-      where: { id_clase, id_alumno: id_rol },
+      where: { id_clase, id_alumno: id_rol, estado: ESTADO_INSCRIPCION.confirmada },
     });
     if (!inscripcion) throw new AppError('No estás inscripto en esta clase', 403);
 
@@ -39,16 +51,9 @@ export const obtenerTokenService = async (id_clase: string, id_usuario: string, 
     throw new AppError('No tenés permiso para esta clase', 403);
   }
 
-  //const ahora = new Date();
   const inicio = new Date(clase.fecha_hora_inicio);
-  //const fin = new Date(clase.fecha_hora_fin);
-  //const tiempoPermitidoInicio = new Date(inicio.getTime() - 10 * 60 * 1000);
 
-  /*if (ahora < tiempoPermitidoInicio || ahora > fin) {
-    throw new Error('La videollamada no está disponible en este momento.');
-  }*/
-
- const sala = await prisma.salaVideollamada.upsert({
+  const sala = await prisma.salaVideollamada.upsert({
     where: { id_clase },
     update: {},
     create: {

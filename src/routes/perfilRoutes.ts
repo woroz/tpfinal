@@ -5,6 +5,7 @@ import { AppError } from '../utils/error.js'
 import { auth } from '../middlewares/authMiddleware.js'
 import { validate } from '../middlewares/validateMiddleware.js'
 import { upload } from '../utils/multer.js'
+import { estadisticaService } from '../services/estadisticaService.js'
 
 const router = Router()
 
@@ -54,6 +55,24 @@ router.post('/avatar', auth(['profesor', 'alumno']), upload.single('avatar'), as
         )
 
         res.status(200).json({ message: 'Avatar actualizado', perfil })
+    } catch (error) {
+        next(error)
+    }
+})
+
+router.get('/estadisticas', auth(['profesor', 'alumno']), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        if (!req.user || !req.user.id_rol) {
+            throw new AppError('Usuario no autenticado', 401)
+        }
+
+        const estadisticas = await estadisticaService.obtenerEstadisticas(
+            req.user.id_usuario,
+            req.user.rol,
+            req.user.id_rol
+        )
+
+        res.status(200).json({ message: 'Estadisticas obtenidas:', ...estadisticas })
     } catch (error) {
         next(error)
     }
