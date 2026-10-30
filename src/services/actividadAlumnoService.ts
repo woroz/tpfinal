@@ -1,5 +1,6 @@
 import { prisma } from '../utils/prisma.js'
 import { AppError } from '../utils/error.js'
+import { estadisticaService } from './estadisticaService.js'
 
 function dtoRegistro(registro: {
     id_registro: string
@@ -92,6 +93,12 @@ export const actividadAlumnoService = {
                 nota: datos.nota || null
             }
         })
+        
+        try {
+            await estadisticaService.recalcularEstadisticasAlumno(datos.id_alumno)
+        } catch (error) {
+            console.error('Error al recalcular estadísticas tras la calificación', error)
+        }
         return dtoRegistro(registro)
     },
 
@@ -102,7 +109,7 @@ export const actividadAlumnoService = {
     }) {
         const existente = await prisma.registroActividadAlumno.findFirst({
             where: { id_registro: idRegistro, id_profesor: idProfesor },
-            select: { id_registro: true, id_clase: true }
+            select: { id_registro: true, id_clase: true, id_alumno: true }
         })
         if (!existente) throw new AppError('Registro no encontrado', 404)
         await verificarClaseFinalizada(existente.id_clase, idProfesor)
@@ -115,6 +122,12 @@ export const actividadAlumnoService = {
                 ...(datos.nota !== undefined ? { nota: datos.nota || null } : {})
             }
         })
+
+        try {
+            await estadisticaService.recalcularEstadisticasAlumno(existente.id_alumno)
+        } catch (error) {
+            console.error('Error al recalcular estadísticas tras editar la calificación', error)
+        }
         return dtoRegistro(registro)
     },
 

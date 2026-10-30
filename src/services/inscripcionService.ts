@@ -7,6 +7,7 @@ import type { Prisma } from '../generated/prisma/client.js'
 import { encajaEnFranja } from './horarioService.js'
 import { mercadoPagoService } from './mercadoPagoService.js'
 import { notificacionService } from './notificacionService.js'
+import { estadisticaService } from './estadisticaService.js'
 
 type Tx = Prisma.TransactionClient
 
@@ -252,6 +253,19 @@ async function confirmarPagoAprobado(idInscripcion: string, idPagoMp: string): P
 
     if (resultado === 'confirmada') {
         await notificacionService.reservaConfirmada(idInscripcion)
+
+        const insc = await prisma.inscripcion.findUnique({
+            where: { id_inscripcion: idInscripcion },
+            select: { id_alumno: true, clase: { select: { id_profesor: true } } }
+        })
+        if (insc) {
+            try {
+                await estadisticaService.recalcularEstadisticasAlumno(insc.id_alumno)
+                await estadisticaService.recalcularEstadisticasProfesor(insc.clase.id_profesor)
+            } catch (error) {
+                console.error('Error al recalcular estadísticas tras el pago', error)
+            }
+        }
     }
 
     if (resultado === 'conflicto') {
