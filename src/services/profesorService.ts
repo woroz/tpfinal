@@ -4,6 +4,7 @@ import { Prisma } from '../generated/prisma/client.js'
 import { ESTADO_CLASE, ESTADO_INSCRIPCION } from '../utils/estados.js'
 import { minutosAHora } from '../utils/fechas.js'
 import { notificacionService } from './notificacionService.js'
+import { estadisticaService } from './estadisticaService.js'
 
 export const profesorService = {
     buscarProfesores: async (filtros: {
@@ -107,6 +108,7 @@ export const profesorService = {
                     select: {
                         nombre: true,
                         email: true,
+                        createdAt: true,
                         perfil: true
                     }
                 },
@@ -142,6 +144,25 @@ export const profesorService = {
         ? profesor.resenas.reduce((acc, resena) => acc + resena.puntaje, 0) / profesor.resenas.length
         : null;
 
+        let estadisticas: {
+            clasesDictadas: number;
+            cantidadResenas: number;
+            promedioResenas: number | null;
+            actualizadoEn: Date;
+        } | null = null;
+
+        try {
+            const fila = await estadisticaService.recalcularEstadisticasProfesor(id_profesor);
+            estadisticas = {
+                clasesDictadas: fila.clasesDictadas,
+                cantidadResenas: fila.cantidadResenas,
+                promedioResenas: fila.promedioResenas,
+                actualizadoEn: fila.actualizadoEn
+            };
+        } catch (error) {
+            console.error('Error al obtener estadísticas del profesor', id_profesor, error);
+        }
+
         return {
             ...profesor,
             disponibilidad: profesor.disponibilidad.map((franja) => ({
@@ -150,7 +171,8 @@ export const profesorService = {
                 hasta: minutosAHora(franja.minutoFin),
                 id_materia: franja.id_materia
             })),
-            promedioResenas
+            promedioResenas,
+            estadisticas
         }
     },
 
@@ -188,7 +210,6 @@ export const profesorService = {
             cuposDisponibles: Math.max(clase.cupo_maximo - inscripciones.length, 0)
         }))
     },
-
     crearResena: async (
         id_profesor: string,
         id_alumno: string,
@@ -221,9 +242,10 @@ export const profesorService = {
             throw new AppError('Ya dejaste una reseña para este profesor', 409)
         }
 
+        let resena
         try {
-            return await prisma.$transaction(async (tx) => {
-                const resena = await tx.resena.create({
+            resena = await prisma.$transaction(async (tx) => {
+                const nuevaResena = await tx.resena.create({
                     data: {
                         id_clase: inscripcion.id_clase,
                         id_alumno,
@@ -233,7 +255,7 @@ export const profesorService = {
                     }
                 })
                 await notificacionService.resenaNueva(tx, id_profesor, id_alumno, datos.puntaje)
-                return resena
+                return nuevaResena
             })
         } catch (error) {
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -241,6 +263,15 @@ export const profesorService = {
             }
             throw error
         }
+
+        try {
+            await estadisticaService.recalcularEstadisticasProfesor(id_profesor)
+            await estadisticaService.recalcularEstadisticasAlumno(id_alumno)
+        } catch (error) {
+            console.error('Error al recalcular estadísticas tras la reseña', error)
+        }
+
+        return resena
     },
 
     actualizarResena: async (
@@ -273,13 +304,21 @@ export const profesorService = {
             throw new AppError('Solo podes modificar la reseña de una clase confirmada y ya finalizada', 403)
         }
 
-        return prisma.resena.update({
+        const actualizada = await prisma.resena.update({
             where: { id_resena: resena.id_resena },
             data: {
                 puntaje: datos.puntaje,
                 comentario: datos.comentario || null
             }
         })
+        
+        try {
+            await estadisticaService.recalcularEstadisticasProfesor(id_profesor)
+        } catch (error) {
+            console.error('Error al recalcular estadísticas tras editar la reseña', error)
+        }
+        
+        return actualizada
     },
 
     obtenerResenas: async (id_profesor: string) => {
