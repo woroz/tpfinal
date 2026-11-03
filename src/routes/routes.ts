@@ -13,7 +13,7 @@ import salaVideoLlamadaRoutes from './salaVideoLlamadaRoutes.js';
 import transcripcion from './transcripcionRoutes.js'
 import actividadAlumnoRoutes from './actividadAlumnoRoutes.js'
 import tablonRoutes from './tablonRoutes.js'
-
+import logrosRoutes from './logroRoutes.js'
 const router = Router()
 
 router.use('/transcripcion', transcripcion);
@@ -30,5 +30,5 @@ router.use('/materias', materiaRoutes);
 router.use('/areas', areaRoutes);
 router.use('/sala-videollamada', salaVideoLlamadaRoutes);
 router.use('/tablon', tablonRoutes);
-
+router.use('/logros', logrosRoutes);
 export default router

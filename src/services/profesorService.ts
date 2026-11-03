@@ -1,3 +1,4 @@
+import { logroService } from './logroService.js'
 import { prisma } from '../utils/prisma.js';
 import { AppError } from '../utils/error.js';
 import { Prisma } from '../generated/prisma/client.js'
@@ -109,6 +110,7 @@ export const profesorService = {
                         nombre: true,
                         email: true,
                         createdAt: true,
+                        logrosObtenidos: { include: { logro: true }, orderBy: { fechaObtencion: 'desc' } },
                         perfil: true
                     }
                 },
@@ -139,6 +141,10 @@ export const profesorService = {
         })
 
         if (!profesor) throw new AppError('Profesor no encontrado', 404);
+
+        if (profesor.usuario.perfil?.visibilidad === 'privado') {
+            profesor.usuario.logrosObtenidos = [];
+        }
 
         const promedioResenas = profesor.resenas.length > 0
         ? profesor.resenas.reduce((acc, resena) => acc + resena.puntaje, 0) / profesor.resenas.length
@@ -267,6 +273,8 @@ export const profesorService = {
         try {
             await estadisticaService.recalcularEstadisticasProfesor(id_profesor)
             await estadisticaService.recalcularEstadisticasAlumno(id_alumno)
+            await logroService.actualizarPorRol('alumno', id_alumno)
+            await logroService.actualizarPorRol('profesor', id_profesor)
         } catch (error) {
             console.error('Error al recalcular estadísticas tras la reseña', error)
         }

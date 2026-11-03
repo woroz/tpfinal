@@ -3,6 +3,7 @@ import { Server } from 'socket.io'
 import { config } from './config/index.js'
 import app from './app.js'
 import { prisma } from './utils/prisma.js'
+import { logroService } from './services/logroService.js'
 import { initSocketService } from './services/socketService.js'
 
 process.on('uncaughtException', (error: Error) => {
@@ -46,6 +47,18 @@ initSocketService(io)
 
 
 if (process.env.VERCEL !== '1') {
+    // Sin solapar ejecuciones; los errores se reintentan en la siguiente revisi?n.
+    let revisandoLogros = false
+    const revisarLogros = async () => {
+        if (revisandoLogros) return
+        revisandoLogros = true
+        try { await logroService.actualizarTodos() }
+        catch (error) { console.error('Error en la revisi?n de logros', error) }
+        finally { revisandoLogros = false }
+    }
+    void revisarLogros()
+    setInterval(() => void revisarLogros(), 5 * 60_000).unref()
+
     server.listen(config.port, () => {
         console.log(`Servidor escuchando en el puerto ${config.port}`)
     })

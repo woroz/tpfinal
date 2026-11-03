@@ -1,4 +1,5 @@
 import { prisma } from '../utils/prisma.js';
+import { logroService } from './logroService.js';
 import { AppError } from '../utils/error.js';
 import type { Role } from '../generated/prisma/client.js'
 import { verificarImagen } from '../utils/moderacion.js'
@@ -127,7 +128,11 @@ export const perfilService = {
 
         if (!usuario) throw new AppError('Usuario no encontrado', 404);
 
+        let id_rol = usuario.alumno?.id_alumno;
+        if (usuario.rol === 'profesor') id_rol = usuario.profesor?.id_profesor;
+        if (!id_rol) throw new AppError('Perfil no encontrado', 409);
+        const logros = await logroService.listarLogrosObtenidos(id_usuario, id_rol, usuario.rol);
         const { contrasena, ...usuarioSinPassword } = usuario;
-        return usuarioSinPassword
+        return { ...usuarioSinPassword, logros }
     }
 }

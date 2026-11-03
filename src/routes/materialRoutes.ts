@@ -1,3 +1,4 @@
+import { logroService } from '../services/logroService.js'
 import { Router, Request, Response } from 'express'
 import multer from 'multer'
 import { auth } from '../middlewares/authMiddleware.js'
@@ -27,6 +28,7 @@ router.post('/:id/material', auth(['profesor']), upload.single('pdf'), async (re
     })
   }, { maxWait: 10_000, timeout: 60_000 })
 
+  await logroService.actualizarSeguro(req.user!)
   res.status(200).json({
     material: { id_material: material.id_material, url: material.url, nombre: material.nombre },
     cantidad: await prisma.materialClase.count({ where: { id_clase: idClase } })
@@ -73,6 +75,7 @@ router.patch('/:id/material/:id_material', auth(['profesor']), upload.single('pd
     advertencia = 'El PDF se reemplazó, pero no se pudo eliminar el archivo anterior del almacenamiento.'
   }
 
+  await logroService.actualizarSeguro(req.user!)
   res.status(200).json({
     material: {
       id_material: actualizado.actualizado.id_material,
@@ -116,6 +119,7 @@ router.delete('/:id/material/:id_material', auth(['profesor']), async (req: Requ
     advertencia = 'El PDF se quitó de la clase, pero no se pudo eliminar el archivo del almacenamiento.'
   }
 
+  await logroService.actualizarSeguro(req.user!)
   res.status(200).json({ message: 'PDF eliminado de la clase', ...(advertencia ? { advertencia } : {}) })
 })
 
