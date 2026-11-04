@@ -409,10 +409,11 @@ model respuestaQuiz {
 
 model Logro {
   id_logro     String          @id @default(uuid())
-  nombre       String
-  descripcion  String?
+  nombre       String          @unique
+  descripcion  String
   condicion    String
-  rol_objetivo String
+  roles_objetivo Role[]
+  objetivo     Int
   obtenidos    LogroObtenido[]
 }
 
@@ -423,6 +424,8 @@ model LogroObtenido {
   fechaObtencion    DateTime @default(now())
   logro             Logro    @relation(fields: [id_logro], references: [id_logro])
   usuario           Usuario  @relation(fields: [id_usuario], references: [id_usuario])
+
+  @@unique([id_usuario, id_logro])
 }
 
 model materialDidactico {

@@ -1,3 +1,4 @@
+import { logroService } from './logroService.js'
 import { prisma } from '../utils/prisma.js'
 import { AppError } from '../utils/error.js'
 import { estadisticaService } from './estadisticaService.js'
@@ -96,6 +97,7 @@ export const actividadAlumnoService = {
         
         try {
             await estadisticaService.recalcularEstadisticasAlumno(datos.id_alumno)
+            await logroService.actualizarPorRol('profesor', idProfesor)
         } catch (error) {
             console.error('Error al recalcular estadísticas tras la calificación', error)
         }
@@ -125,6 +127,7 @@ export const actividadAlumnoService = {
 
         try {
             await estadisticaService.recalcularEstadisticasAlumno(existente.id_alumno)
+            await logroService.actualizarPorRol('profesor', idProfesor)
         } catch (error) {
             console.error('Error al recalcular estadísticas tras editar la calificación', error)
         }
