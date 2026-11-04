@@ -14,6 +14,8 @@ import transcripcion from './transcripcionRoutes.js'
 import actividadAlumnoRoutes from './actividadAlumnoRoutes.js'
 import tablonRoutes from './tablonRoutes.js'
 import logrosRoutes from './logroRoutes.js'
+import adminRoutes from './adminRoutes.js'
+
 const router = Router()
 
 router.use('/transcripcion', transcripcion);
@@ -31,4 +33,6 @@ router.use('/areas', areaRoutes);
 router.use('/sala-videollamada', salaVideoLlamadaRoutes);
 router.use('/tablon', tablonRoutes);
 router.use('/logros', logrosRoutes);
+router.use('/admin', adminRoutes);
+
 export default router
