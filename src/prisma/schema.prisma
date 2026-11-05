@@ -166,6 +166,8 @@ model Clase {
   materiales         materialDidactico[]
   mensajes           mensaje[]
   ofertas            ofertaSolicitud[]
+  profesorAsistio    Boolean                   @default(false)
+  profesorIngreso    DateTime?
   quizzes            quiz[]
   reclamos           reclamo[]
   salaVideollamada   salaVideollamada?

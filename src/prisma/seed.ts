@@ -161,13 +161,35 @@ async function crearAlumno(email: string, nombre: string, contrasena: string) {
         create: { id_usuario: usuario.id_usuario, ...datos }
     })
 }
+
+async function crearAdmin(contrasena: string) {
+    return prisma.usuario.upsert({
+        where: { email: 'admin@mentorar.test' },
+        update: { nombre: 'Admin Demo', contrasena, rol: 'admin' },
+        create: {
+            email: 'admin@mentorar.test',
+            nombre: 'Admin Demo',
+            contrasena,
+            rol: 'admin'
+        }
+    })
+}
  
 // Una clase ya dada, pagada y con resena, para que el perfil, "Mis clases"
 // (historial) y "Mis pagos" tengan algo que mostrar.
 async function crearClaseDadaConResena(idProfesor: string, idAlumno: string, idMateria: string, precio: number) {
     const titulo = 'Clase de Matematica (demo)'
     const existente = await prisma.clase.findFirst({ where: { id_profesor: idProfesor, titulo } })
-    if (existente) return
+    if (existente) {
+        await prisma.clase.update({
+            where: { id_clase: existente.id_clase },
+            data: {
+                profesorAsistio: true,
+                profesorIngreso: existente.fecha_hora_inicio
+            }
+        })
+        return
+    }
  
     const inicio = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
     inicio.setMinutes(0, 0, 0)
@@ -185,7 +207,9 @@ async function crearClaseDadaConResena(idProfesor: string, idAlumno: string, idM
             precio,
             tipo: 'individual',
             origen: 'reserva',
-            estado: 'finalizada'
+            estado: 'finalizada',
+            profesorAsistio: true,
+            profesorIngreso: inicio
         }
     })
  
@@ -213,6 +237,87 @@ async function crearClaseDadaConResena(idProfesor: string, idAlumno: string, idM
             comentario: 'Explica muy claro y con paciencia. Recomendado.'
         }
     })
+}
+
+async function crearClasesPruebaReclamos(idProfesor: string, idAlumno: string, idMateria: string) {
+    const casos = [
+        {
+            titulo: 'Clase histórica con ambas asistencias (demo reclamo)',
+            profesorAsistio: true,
+            profesorIngreso: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
+        },
+        {
+            titulo: 'Clase histórica con profesor ausente (demo reclamo)',
+            profesorAsistio: false,
+            profesorIngreso: null
+        }
+    ]
+
+    for (const [indice, caso] of casos.entries()) {
+        const inicio = new Date(Date.now() - (indice + 3) * 24 * 60 * 60 * 1000)
+        inicio.setHours(16 + indice * 2, 0, 0, 0)
+        const fin = new Date(inicio.getTime() + 60 * 60 * 1000)
+
+        let clase = await prisma.clase.findFirst({
+            where: { id_profesor: idProfesor, titulo: caso.titulo }
+        })
+
+        if (!clase) {
+            clase = await prisma.clase.create({
+                data: {
+                    id_profesor: idProfesor,
+                    id_materia: idMateria,
+                    titulo: caso.titulo,
+                    tema: 'Prueba de asistencia y reclamos',
+                    contenido: 'Clase creada por la seed para probar el flujo de reclamos.',
+                    fecha_hora_inicio: inicio,
+                    fecha_hora_fin: fin,
+                    cupo_maximo: 1,
+                    precio: 0,
+                    tipo: 'individual',
+                    origen: 'reserva',
+                    estado: 'finalizada',
+                    profesorAsistio: caso.profesorAsistio,
+                    profesorIngreso: caso.profesorIngreso
+                }
+            })
+        } else {
+            clase = await prisma.clase.update({
+                where: { id_clase: clase.id_clase },
+                data: {
+                    fecha_hora_inicio: inicio,
+                    fecha_hora_fin: fin,
+                    estado: 'finalizada',
+                    profesorAsistio: caso.profesorAsistio,
+                    profesorIngreso: caso.profesorIngreso
+                }
+            })
+        }
+
+        if (!caso.profesorAsistio) {
+            await prisma.resena.deleteMany({ where: { id_clase: clase.id_clase } })
+        }
+
+        const inscripcion = await prisma.inscripcion.findFirst({
+            where: { id_clase: clase.id_clase, id_alumno: idAlumno }
+        })
+
+        if (inscripcion) {
+            await prisma.inscripcion.update({
+                where: { id_inscripcion: inscripcion.id_inscripcion },
+                data: { estado: 'confirmada', asistio: true }
+            })
+        } else {
+            await prisma.inscripcion.create({
+                data: {
+                    id_clase: clase.id_clase,
+                    id_alumno: idAlumno,
+                    estado: 'confirmada',
+                    asistio: true
+                }
+            })
+        }
+    }
 }
  
 async function main() {
@@ -271,8 +376,10 @@ async function main() {
     })
  
     const alumno = await crearAlumno('alumno@mentorar.test', 'Alumno Demo', contrasena)
+    await crearAdmin(contrasena)
  
     await crearClaseDadaConResena(profesor.id_profesor, alumno.id_alumno, idsMaterias[0], 8000)
+    await crearClasesPruebaReclamos(profesor.id_profesor, alumno.id_alumno, idsMaterias[0])
     await crearClaseFutura(profesor.id_profesor, idsMaterias[0], 'Matematica', 8000)
     await crearClaseFutura(profesorGratis.id_profesor, idsMaterias[1], 'Fisica', 0)
     await crearClaseConAlumno(profesor.id_profesor, alumno.id_alumno, idsMaterias[0])
@@ -283,8 +390,10 @@ async function main() {
     console.log('  Profesor (8000):    profesor@mentorar.test')
     console.log('  Profesor (gratis):  profesorgratis@mentorar.test')
     console.log('  Profesor sin materias: profesorsinmaterias@mentorar.test')
+    console.log('  Admin:               admin@mentorar.test')
     console.log(`  Ubicacion base: ${LAT}, ${LNG}`)
     console.log(`  id_profesor demo: ${profesor.id_profesor}`)
+    console.log('  Reclamos: alumno@mentorar.test tiene dos clases históricas de prueba; solo una permite reclamar.')
     console.log('  Horarios: Matemática 09:00-12:00, Física 12:00-15:00, Química 15:00-18:00; todos los días')
 }
  
