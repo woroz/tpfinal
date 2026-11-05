@@ -1,10 +1,10 @@
 import { createServer } from 'http'
-import { Server } from 'socket.io'
+//import { Server } from 'socket.io'
 import { config } from './config/index.js'
 import app from './app.js'
 import { prisma } from './utils/prisma.js'
 import { logroService } from './services/logroService.js'
-import { initSocketService } from './services/socketService.js'
+//import { initSocketService } from './services/socketService.js'
 
 process.on('uncaughtException', (error: Error) => {
     console.error('Excepcion sincronica detectada', { name: error.name, message: error.message, stack: error.stack })
@@ -15,7 +15,6 @@ process.on('unhandledRejection', (error: Error) => {
     console.error('Rechazo de promesa no detectado', { message: error.message || error })
     process.exit(1)
 })
-
 try {
     await prisma.$queryRaw`SELECT 1`
     console.log('base de datos conectada')
@@ -26,7 +25,7 @@ try {
 
 const server = createServer(app)
 
-const io = new Server(server, {
+/* const io = new Server(server, {
     cors: {
         origin: (origin, callback) => {
             const allowedOrigins = new Set([
@@ -43,7 +42,7 @@ const io = new Server(server, {
         credentials: true
     }
 })
-initSocketService(io)
+initSocketService(io)*/
 
 
 if (process.env.VERCEL !== '1') {

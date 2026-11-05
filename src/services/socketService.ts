@@ -1,48 +1,56 @@
 import { Server, Socket } from 'socket.io';
-import { prisma } from '../utils/prisma.js'; 
-import { marcarMensajesComoLeidos } from './mensajeService.js';
+import { prismaChat as prisma } from '../utils/prismaChat.js';
+import { marcarMensajesComoLeidos } from './mensajeChatService.js';
 
 export const initSocketService = (io: Server) => {
   io.on('connection', (socket: Socket) => {
     console.log(`Usuario conectado al socket: ${socket.id}`);
-   
-    socket.on('unirse_clase', async (data: { id_clase: string; id_usuario_actual: string }) => {
-      const { id_clase, id_usuario_actual } = data;
+    const id_usuario_actual = socket.data.usuario.id_usuario;
+
+    socket.on('unirse_clase', async (data: { id_clase: string }) => {
+      const { id_clase } = data;
       try {
         const clase = await prisma.clase.findUnique({
           where: { id_clase },
           select: {
             id_clase: true,
             profesor: {
+              select: { id_usuario: true }
+            },
+            inscripciones: {
               select: {
-                id_usuario: true
-              }},
-              inscripciones: {
-                select: {
-                  alumno: {
-                    select: {
-                      id_usuario: true
-          }}}}}});
-        
+                alumno: {
+                  select: { id_usuario: true }
+                }
+              }
+            }
+          }
+        });
         if (!clase) {
           socket.emit('error_socket', { mensaje: 'La clase especificada no existe.' });
           return;
         }
-        
+
         const esProfesorDeLaClase = clase.profesor.id_usuario === id_usuario_actual;
-        const esAlumnoInscrito = clase.inscripciones.some(ins => ins.alumno.id_usuario === id_usuario_actual);
+        const esAlumnoInscrito = clase.inscripciones.some(
+          ins => ins.alumno.id_usuario === id_usuario_actual
+        );
 
         if (!esProfesorDeLaClase && !esAlumnoInscrito) {
           console.warn(`Acceso no autorizado del usuario ${id_usuario_actual} a la clase ${id_clase}`);
           socket.emit('error_socket', { mensaje: 'No tienes permiso para ver el chat de esta clase.' });
-          return; 
+          return;
         }
 
         socket.join(id_clase);
         console.log(`Acceso autorizado: Usuario ${socket.id} se unió a la sala: ${id_clase}`);
 
         await marcarMensajesComoLeidos(id_clase, id_usuario_actual);
-        io.to(id_clase).emit('mensajes_leidos_actualizados', { id_clase, por_usuario: id_usuario_actual });
+
+        io.to(id_clase).emit('mensajes_leidos_actualizados', {
+          id_clase,
+          por_usuario: id_usuario_actual
+        });
 
       } catch (error) {
         console.error('Error en validación de seguridad de socket:', error);
@@ -50,15 +58,22 @@ export const initSocketService = (io: Server) => {
       }
     });
 
-    socket.on('marcar_mensajes_leidos', async (data: { id_clase: string; id_usuario: string }) => {
-      const { id_clase, id_usuario } = data;      
+    socket.on('marcar_mensajes_leidos', async (data: { id_clase: string }) => {
+      const { id_clase } = data;
+
       try {
-        await marcarMensajesComoLeidos(id_clase, id_usuario);
-        // Transmitimos el cambio a TODO el chat
-        io.to(id_clase).emit('mensajes_leidos_actualizados', { 
-          id_clase, 
-          por_usuario: id_usuario 
+        if (!socket.rooms.has(id_clase)) {
+          socket.emit('error_socket', { mensaje: 'No tienes acceso a esta sala.' });
+          return;
+        }
+
+        await marcarMensajesComoLeidos(id_clase, id_usuario_actual);
+
+        io.to(id_clase).emit('mensajes_leidos_actualizados', {
+          id_clase,
+          por_usuario: id_usuario_actual
         });
+
       } catch (error) {
         console.error('Error al actualizar vistos:', error);
       }
@@ -66,17 +81,26 @@ export const initSocketService = (io: Server) => {
 
     socket.on('enviar_mensaje', async (data: {
       id_clase: string;
-      id_usuario_remitente: string;
       contenido: string;
     }) => {
-      const { id_clase, id_usuario_remitente, contenido } = data;
+      const { id_clase, contenido } = data;
 
       try {
+        if (!socket.rooms.has(id_clase)) {
+          socket.emit('error_socket', { mensaje: 'No tienes acceso a esta sala.' });
+          return;
+        }
+
+        if (typeof contenido !== 'string' || !contenido.trim()) {
+          socket.emit('error_socket', { mensaje: 'El mensaje no puede estar vacío.' });
+          return;
+        }
+
         const nuevoMensaje = await prisma.mensaje.create({
           data: {
-            contenido,
+            contenido: contenido.trim(),
             id_clase,
-            id_usuario_remitente,
+            id_usuario_remitente: id_usuario_actual,
             fecha_envio: new Date(),
             leido: false
           }

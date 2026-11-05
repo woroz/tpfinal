@@ -4,7 +4,6 @@ export const getHistorialChatByClase = async (id_clase: string) => {
   const claseExiste = await prisma.clase.findUnique({
     where: { id_clase }
   });
-
 if (!claseExiste) {
     return null;
   }
@@ -22,21 +21,6 @@ if (!claseExiste) {
           rol: true
         }
       }
-    }
-  });
-};
-
-export const marcarMensajesComoLeidos = async (id_clase: string, id_usuario_actual: string) => {
-  return await prisma.mensaje.updateMany({
-    where: {
-      id_clase,
-      NOT: {
-        id_usuario_remitente: id_usuario_actual
-      },
-      leido: false
-    },
-    data: {
-      leido: true
     }
   });
 };

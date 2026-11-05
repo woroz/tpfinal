@@ -36,3 +36,4 @@ router.use('/logros', logrosRoutes);
 router.use('/admin', adminRoutes);
 
 export default router
+
