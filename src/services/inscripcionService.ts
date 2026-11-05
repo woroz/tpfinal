@@ -38,6 +38,14 @@ function incluirDetalle(idAlumno?: string) {
                 archivosPdf: { orderBy: { fecha_carga: 'asc' } },
                 ...(idAlumno
                     ? {
+                        reclamos: {
+                            where: { id_alumno: idAlumno },
+                            select: { id_reclamo: true, motivo: true, estado: true, createdAt: true }
+                        }
+                    }
+                    : {}),
+                ...(idAlumno
+                    ? {
                         registrosActividad: {
                             where: { id_alumno: idAlumno },
                             orderBy: { createdAt: 'desc' }
@@ -75,7 +83,7 @@ function aDto(inscripcion: InscripcionDetalle) {
         && inscripcion.expiraEn !== null
         && inscripcion.expiraEn <= new Date()
     const resena = 'resenas' in inscripcion.clase.profesor
-        ? inscripcion.clase.profesor.resenas[0] ?? null
+        ? inscripcion.clase.profesor.resenas.find((item) => item.id_clase === inscripcion.clase.id_clase) ?? null
         : null
 
     return {
@@ -115,6 +123,15 @@ function aDto(inscripcion: InscripcionDetalle) {
             resenaHecha: resena !== null,
             resena
         },
+        profesor_asistio: inscripcion.clase.profesorAsistio,
+        puede_reclamar: inscripcion.estado === ESTADO_INSCRIPCION.confirmada
+            && inscripcion.clase.fecha_hora_fin <= new Date()
+            && inscripcion.asistio
+            && !inscripcion.clase.profesorAsistio
+            && ('reclamos' in inscripcion.clase ? inscripcion.clase.reclamos.length === 0 : false),
+        reclamo: 'reclamos' in inscripcion.clase
+            ? inscripcion.clase.reclamos[0] ?? null
+            : null,
         pago: inscripcion.pago
             ? {
                 estado: inscripcion.pago.estado,

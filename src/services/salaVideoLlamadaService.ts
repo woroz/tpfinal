@@ -23,6 +23,13 @@ export const obtenerTokenService = async (id_clase: string, id_usuario: string, 
     if (!id_rol || clase.id_profesor !== id_rol) {
       throw new AppError('No sos el profesor de esta clase', 403);
     }
+    await prisma.clase.update({
+      where: { id_clase },
+      data: {
+        profesorAsistio: true,
+        profesorIngreso: new Date()
+      }
+    });
   } else if (rol === 'alumno') {
     if (!id_rol) throw new AppError('Alumno no identificado', 403);
 

@@ -15,6 +15,7 @@ import actividadAlumnoRoutes from './actividadAlumnoRoutes.js'
 import tablonRoutes from './tablonRoutes.js'
 import logrosRoutes from './logroRoutes.js'
 import adminRoutes from './adminRoutes.js'
+import reclamoRoutes from './reclamoRoutes.js'
 
 const router = Router()
 
@@ -34,6 +35,6 @@ router.use('/sala-videollamada', salaVideoLlamadaRoutes);
 router.use('/tablon', tablonRoutes);
 router.use('/logros', logrosRoutes);
 router.use('/admin', adminRoutes);
+router.use('/reclamos', reclamoRoutes);
 
 export default router
-
