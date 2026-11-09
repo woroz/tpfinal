@@ -66,7 +66,8 @@ export const horarioService = {
             select: { fecha_hora_inicio: true, fecha_hora_fin: true }
         })
 
-        const minimo = new Date(ahora.getTime() + anticipacionMin * MS_MINUTO)
+        const ahoraMinuto = Math.floor(ahora.getTime() / MS_MINUTO) * MS_MINUTO
+        const minimo = new Date(ahoraMinuto + anticipacionMin * MS_MINUTO)
         const franjas: FranjaSemanal[] = profesor.disponibilidad
         const dias: { fecha: string; horarios: { inicio: string; fin: string; id_materia: string | null }[] }[] = []
 

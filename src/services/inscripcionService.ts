@@ -340,7 +340,8 @@ export const inscripcionService = {
         const inicio = new Date(datos.inicio)
         const fin = new Date(inicio.getTime() + duracionMin * MS_MINUTO)
 
-        if (inicio.getTime() < ahora.getTime() + anticipacionMin * MS_MINUTO) {
+        const ahoraMinuto = Math.floor(ahora.getTime() / MS_MINUTO) * MS_MINUTO
+        if (inicio.getTime() < ahoraMinuto + anticipacionMin * MS_MINUTO) {
             throw new AppError('El horario elegido ya no esta disponible', 409)
         }
 

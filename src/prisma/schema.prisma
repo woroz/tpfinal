@@ -345,6 +345,8 @@ model Recordatorio {
   enviadoEn               DateTime @default(now())
   clase                   Clase    @relation(fields: [id_clase], references: [id_clase])
   destinatario            Usuario  @relation(fields: [id_usuario_destinatario], references: [id_usuario])
+
+  @@unique([id_clase, id_usuario_destinatario])
 }
 
 model mensaje {

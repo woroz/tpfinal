@@ -41,7 +41,7 @@ export const config = {
         port: Number(optionalEnv('SMTP_PORT') ?? 587),
         user: optionalEnv('SMTP_USER'),
         pass: optionalEnv('SMTP_PASS'),
-        from: optionalEnv('MAIL_FROM') ?? 'MentorAr <no-reply@mentorar.local>'
+        from: optionalEnv('MAIL_FROM') ?? 'MentorAr <mentoaroficial@gmail.com>'
     },
     reservas: {
         duracionMin: 60,

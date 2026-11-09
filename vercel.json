@@ -16,6 +16,10 @@
         {
             "path": "/logros/actualizar-programados",
             "schedule": "0 3 * * *"
+        },
+        {
+            "path": "/recordatorios/procesar",
+            "schedule": "*/5 * * * *"
         }
     ]
 }
