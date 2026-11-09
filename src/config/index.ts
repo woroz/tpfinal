@@ -52,7 +52,8 @@ export const config = {
     },
     Groq: {
         GROP_API_KEY: requireEnv('GROQ_API_KEY'),
-        GROQ_MODEL: requireEnv('GROQ_MODEL')
+        GROQ_MODEL: requireEnv('GROQ_MODEL'),
+        GROQ_RESUMEN_MODEL: requireEnv('GROQ_RESUMEN_MODEL')
     },
     CRON:{
         secret: requireEnv('CRON_SECRET')

@@ -51,7 +51,7 @@ export const transcripcionService = {
 
         return prisma.transcripcion.upsert({
             where: { id_clase },
-            update: { contenido: textoAcumulado, fecha_generacion: new Date() },
+            update: { contenido: textoAcumulado, fecha_generacion: new Date(), resumen: null },
             create: {
                 id_clase,
                 contenido: textoAcumulado,
@@ -87,6 +87,26 @@ export const transcripcionService = {
         }
 
         throw new AppError('No tenes permiso para ver esta transcripcion', 403)
+    },
+
+    async generarResumen(id_clase: string, rol: string, id_rol?: string) {
+        const transcripcion = await transcripcionService.obtenerTranscripcion(id_clase, rol, id_rol)
+        if (transcripcion.resumen) return transcripcion
+        if (!transcripcion.contenido.trim()) throw new AppError('No hay transcripción para resumir', 404)
+
+        const respuesta = await groq.chat.completions.create({
+            model: config.Groq.GROQ_RESUMEN_MODEL,
+            temperature: 0.3,
+            messages: [
+                { role: "system", content: "Sos un asistente que resume clases particulares. Respondé en español con: un resumen breve, los temas vistos en viñetas y los conceptos clave. No inventes nada que no esté en la transcripción. Escribí en texto plano: sin markdown, sin asteriscos, sin LaTeX; usá guiones para las viñetas y escribí las fórmulas como texto (ej: F = m · a)." },
+                { role: "user", content: transcripcion.contenido },
+            ],
+        })
+
+        const resumen = respuesta.choices[0]?.message?.content?.trim()
+        if (!resumen) throw new AppError('No se pudo generar el resumen', 502)
+
+        return prisma.transcripcion.update({ where: { id_clase }, data: { resumen } })
     },
 
     async cambiarVisibilidad(id_clase: string, id_profesor: string | undefined, visible: boolean) {

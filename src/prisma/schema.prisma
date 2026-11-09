@@ -339,6 +339,7 @@ model transcripcion {
   idioma           String?
   fecha_generacion DateTime
   visible_alumnos  Boolean
+  resumen          String?
   clase            Clase    @relation(fields: [id_clase], references: [id_clase])
 }
 
