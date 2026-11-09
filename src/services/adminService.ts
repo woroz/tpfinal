@@ -54,6 +54,7 @@ export const adminService = {
                     nombre: true,
                     email: true,
                     rol: true,
+                    bloqueado: true,
                     createdAt: true,
 
                     alumno: {
@@ -107,5 +108,71 @@ export const adminService = {
             totalAlumnos,
             totalProfesores
         };
+    },
+
+    obtenerTodosLosReportes: async () => {
+        const reportes = await prisma.reporte.findMany({
+            orderBy: {
+                createdAt: 'desc'
+            },
+            include: {
+                reportante: {
+                    select: {
+                        id_usuario: true,
+                        nombre: true,
+                        email: true
+                    }
+                },
+                reportado: {
+                    select: {
+                        id_usuario: true,
+                        nombre: true,
+                        email: true,
+                        bloqueado: true
+                    }
+                }
+            }
+        });
+
+        return reportes;
+    },
+
+    cambiarEstadoBloqueoProfesor: async (
+    idUsuario: string,
+    bloqueado: boolean) => {
+    const usuario = await prisma.usuario.findUnique({
+        where: { id_usuario: idUsuario },
+        select: {
+            id_usuario: true,
+            nombre: true,
+            email: true,
+            rol: true,
+            bloqueado: true
+        }
+    });
+
+    if (!usuario) {
+        throw new AppError('Usuario no encontrado', 404);
     }
+
+    if (usuario.rol !== 'profesor') {
+        throw new AppError(
+            'Solo se pueden bloquear o desbloquear profesores',
+            400
+        );
+    }
+
+    const profesorActualizado = await prisma.usuario.update({
+        where: { id_usuario: idUsuario },
+        data: { bloqueado },
+        select: {
+            id_usuario: true,
+            nombre: true,
+            email: true,
+            rol: true,
+            bloqueado: true
+        }
+    });
+    return profesorActualizado;
+    },
 };

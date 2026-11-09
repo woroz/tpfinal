@@ -17,6 +17,7 @@ import logrosRoutes from './logroRoutes.js'
 import adminRoutes from './adminRoutes.js'
 import reclamoRoutes from './reclamoRoutes.js'
 import recordatorioRoutes from './recordatorioRoutes.js'
+import reporteRoutes from './reporteRoutes.js';
 
 const router = Router()
 
@@ -38,5 +39,6 @@ router.use('/logros', logrosRoutes);
 router.use('/admin', adminRoutes);
 router.use('/reclamos', reclamoRoutes);
 router.use('/recordatorios', recordatorioRoutes);
+router.use('/reportes', reporteRoutes);
 
 export default router

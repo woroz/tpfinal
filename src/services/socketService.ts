@@ -4,12 +4,41 @@ import { marcarMensajesComoLeidos } from './mensajeChatService.js';
 
 export const initSocketService = (io: Server) => {
   io.on('connection', (socket: Socket) => {
-    console.log(`Usuario conectado al socket: ${socket.id}`);
     const id_usuario_actual = socket.data.usuario.id_usuario;
+    const verificarUsuarioHabilitado = async (): Promise<boolean> => {
+      const usuario = await prisma.usuario.findUnique({
+        where: {
+          id_usuario: id_usuario_actual
+        },
+        select: {
+          rol: true,
+          bloqueado: true
+        }
+      });
+
+      if (!usuario) {
+        socket.disconnect(true);
+        return false;
+      }
+
+      if (usuario.bloqueado && usuario.rol === 'profesor') {
+        socket.emit('error_socket', {
+          mensaje: 'Tu cuenta de profesor se encuentra bloqueada.'
+        });
+
+        socket.disconnect(true);
+        return false;
+      }
+
+      return true;
+    };
 
     socket.on('unirse_clase', async (data: { id_clase: string }) => {
       const { id_clase } = data;
       try {
+        if (!(await verificarUsuarioHabilitado())) {
+          return;
+        }
         const clase = await prisma.clase.findUnique({
           where: { id_clase },
           select: {
@@ -62,6 +91,9 @@ export const initSocketService = (io: Server) => {
       const { id_clase } = data;
 
       try {
+        if (!(await verificarUsuarioHabilitado())) {
+          return;
+        }
         if (!socket.rooms.has(id_clase)) {
           socket.emit('error_socket', { mensaje: 'No tienes acceso a esta sala.' });
           return;
@@ -86,6 +118,9 @@ export const initSocketService = (io: Server) => {
       const { id_clase, contenido } = data;
 
       try {
+        if (!(await verificarUsuarioHabilitado())) {
+          return;
+        }
         if (!socket.rooms.has(id_clase)) {
           socket.emit('error_socket', { mensaje: 'No tienes acceso a esta sala.' });
           return;
