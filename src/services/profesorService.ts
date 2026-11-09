@@ -107,6 +107,7 @@ export const profesorService = {
             include: {
                 usuario: {
                     select: {
+                        id_usuario: true,
                         nombre: true,
                         email: true,
                         createdAt: true,

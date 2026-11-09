@@ -71,5 +71,58 @@ router.get('/estadisticas', auth(['admin']), async (
     }
 });
 
+router.get('/reportes', auth(['admin']), async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const reportes = await adminService.obtenerTodosLosReportes();
+
+        res.status(200).json({
+            message: 'Reportes obtenidos correctamente',
+            reportes
+        });
+
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.patch('/usuarios/:id/bloqueo', auth(['admin']), async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const id = req.params.id;
+        if (typeof id !== 'string') {
+    throw new AppError('ID de usuario inválido', 400);
+}
+        const { bloqueado } = req.body;
+
+        if (typeof bloqueado !== 'boolean') {
+            throw new AppError(
+                'El campo bloqueado debe ser true o false',
+                400
+            );
+        }
+
+        const usuario = await adminService.cambiarEstadoBloqueoProfesor(
+            id,
+            bloqueado
+        );
+
+        res.status(200).json({
+            message: bloqueado
+                ? 'Profesor bloqueado correctamente'
+                : 'Profesor desbloqueado correctamente',
+            usuario
+        });
+
+    } catch (error) {
+        next(error);
+    }
+});
 
 export default router;

@@ -13,6 +13,7 @@ model Usuario {
   email               String          @unique
   contrasena          String?         @map("contraseña")
   rol                 Role
+  bloqueado           Boolean         @default(false)
   createdAt           DateTime        @default(now())
   updateAt            DateTime        @updatedAt
   googleId            String?         @unique
@@ -305,6 +306,9 @@ model reclamo {
   admin      Usuario? @relation(fields: [id_admin], references: [id_usuario])
   alumno     Alumno   @relation(fields: [id_alumno], references: [id_alumno])
   clase      Clase    @relation(fields: [id_clase], references: [id_clase])
+
+  @@index([id_alumno, createdAt])
+  @@index([estado, createdAt])
 }
 
 model Reporte {
