@@ -36,6 +36,11 @@ function incluirDetalle(idAlumno?: string) {
             include: {
                 materia: true,
                 archivosPdf: { orderBy: { fecha_carga: 'asc' } },
+                grabacion: {
+                    select: {
+                        estado: true
+                    }
+                    },
                 ...(idAlumno
                     ? {
                         reclamos: {
@@ -93,6 +98,9 @@ function aDto(inscripcion: InscripcionDetalle) {
         expira_en: inscripcion.expiraEn,
         clase: {
             id_clase: inscripcion.clase.id_clase,
+            grabacion: inscripcion.clase.grabacion ? {
+            estado: inscripcion.clase.grabacion.estado
+            }: null,
             titulo: inscripcion.clase.titulo,
             tema: inscripcion.clase.tema,
             contenido: inscripcion.clase.contenido ?? null,
