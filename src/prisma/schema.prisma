@@ -240,11 +240,12 @@ model Notificacion {
 model grabacion {
   id_grabacion  String   @id @default(uuid())
   id_clase      String   @unique
-  url_grabacion String
+  egress_id     String?  @unique
+  url_grabacion String?
   duracion      Int?
-  fecha_inicio  DateTime
-  fecha_fin     DateTime
-  estado        String
+  fecha_inicio  DateTime @default(now())
+  fecha_fin     DateTime?
+  estado        String   @default("pendiente")
   clase         Clase    @relation(fields: [id_clase], references: [id_clase])
 }
 
