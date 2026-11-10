@@ -320,6 +320,68 @@ async function crearClasesPruebaReclamos(idProfesor: string, idAlumno: string, i
     }
 }
  
+const TRANSCRIPCION_DEMO = `Bueno, arrancamos. Hoy vamos a ver las tres leyes de Newton, que son la base de toda la dinámica. ¿Te acordás qué vimos la clase pasada? Exacto, cinemática: posición, velocidad y aceleración, pero sin preguntarnos por qué se mueven las cosas. Hoy justamente vemos el por qué.
+Primera ley, la ley de inercia. Dice que un cuerpo se mantiene en reposo o en movimiento rectilíneo uniforme si la fuerza neta sobre él es cero. O sea, si nadie lo empuja, sigue haciendo lo que venía haciendo. El ejemplo típico es el colectivo que frena de golpe: vos seguís yendo para adelante porque tu cuerpo quiere mantener la velocidad que tenía. No es que algo te empuje hacia adelante, es inercia.
+Segunda ley: la fuerza neta es igual a la masa por la aceleración, F igual a m por a. La fuerza se mide en newtons, y un newton es lo que necesitás para acelerar un kilo a un metro por segundo al cuadrado. Hagamos un ejercicio: tenés un carrito de 5 kilos y lo empujás con 20 newtons, sin rozamiento. ¿Cuánto acelera? Veinte dividido cinco, cuatro metros por segundo al cuadrado. Muy bien. Ahora, si hay rozamiento de 5 newtons, la fuerza neta es 15, entonces la aceleración es 3. Siempre primero sumá todas las fuerzas, con su signo, y después dividís por la masa. Ese es el error más común en los parciales: usar una sola fuerza en vez de la neta.
+Tercera ley, acción y reacción. Si yo empujo la pared, la pared me empuja a mí con la misma fuerza pero en sentido contrario. Ojo, que esas dos fuerzas actúan sobre cuerpos distintos, por eso no se anulan. Cuando caminás, empujás el piso hacia atrás y el piso te empuja hacia adelante.
+Para la próxima clase te dejo tres ejercicios de plano inclinado, que es donde se combinan las tres leyes y aparece la descomposición del peso en componentes. Tratá de hacer el diagrama de cuerpo libre antes de escribir cualquier ecuación. Y repasá trigonometría, seno y coseno, porque lo vamos a usar mucho. ¿Alguna duda? Perfecto, nos vemos el jueves.`
+
+// Clase ya dada con transcripción, para probar el resumen con IA.
+async function crearClaseConTranscripcion(idProfesor: string, idMateria: string) {
+    const usuarioAlumno = await prisma.usuario.findFirst({
+        where: { email: { contains: 'samuellopez', mode: 'insensitive' }, rol: 'alumno' },
+        include: { alumno: true }
+    })
+    if (!usuarioAlumno?.alumno) {
+        console.log('  Transcripción demo: no se encontró el alumno samuellopez, se omite.')
+        return
+    }
+    const idAlumno = usuarioAlumno.alumno.id_alumno
+
+    const titulo = 'Clase de Física con transcripción (demo)'
+    let clase = await prisma.clase.findFirst({ where: { id_profesor: idProfesor, titulo } })
+
+    if (!clase) {
+        const inicio = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+        inicio.setHours(18, 0, 0, 0)
+        clase = await prisma.clase.create({
+            data: {
+                id_profesor: idProfesor,
+                id_materia: idMateria,
+                titulo,
+                tema: 'Leyes de Newton',
+                contenido: 'Clase creada por la seed para probar el resumen de la transcripción.',
+                fecha_hora_inicio: inicio,
+                fecha_hora_fin: new Date(inicio.getTime() + 60 * 60 * 1000),
+                cupo_maximo: 1,
+                precio: 0,
+                tipo: 'individual',
+                origen: 'reserva',
+                estado: 'finalizada',
+                profesorAsistio: true,
+                profesorIngreso: inicio
+            }
+        })
+    }
+
+    const inscripcion = await prisma.inscripcion.findFirst({ where: { id_clase: clase.id_clase, id_alumno: idAlumno } })
+    if (!inscripcion) {
+        await prisma.inscripcion.create({
+            data: { id_clase: clase.id_clase, id_alumno: idAlumno, estado: 'confirmada', asistio: true }
+        })
+    }
+
+    // resumen en null para poder probar la generación cada vez que se corre la seed
+    const transcripcion = { contenido: TRANSCRIPCION_DEMO, resumen: null, fecha_generacion: clase.fecha_hora_fin }
+    await prisma.transcripcion.upsert({
+        where: { id_clase: clase.id_clase },
+        update: transcripcion,
+        create: { id_clase: clase.id_clase, idioma: 'es', visible_alumnos: true, ...transcripcion }
+    })
+
+    console.log(`  Transcripción demo: ${usuarioAlumno.email} -> id_clase ${clase.id_clase}`)
+}
+
 async function main() {
     const area = await prisma.areaConocimiento.upsert({
         where: { nombreArea: 'Ciencias exactas' },
@@ -383,7 +445,8 @@ async function main() {
     await crearClaseFutura(profesor.id_profesor, idsMaterias[0], 'Matematica', 8000)
     await crearClaseFutura(profesorGratis.id_profesor, idsMaterias[1], 'Fisica', 0)
     await crearClaseConAlumno(profesor.id_profesor, alumno.id_alumno, idsMaterias[0])
- 
+    await crearClaseConTranscripcion(profesor.id_profesor, idsMaterias[1])
+
     console.log('Datos de prueba cargados')
     console.log(`  Contrasena de todas las cuentas: ${CONTRASENA}`)
     console.log('  Alumno:             alumno@mentorar.test')

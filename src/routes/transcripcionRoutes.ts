@@ -44,6 +44,23 @@ router.get('/:id_clase/transcripcion', auth(['profesor', 'alumno']), async (req:
         }
     })
 
+router.post('/:id_clase/transcripcion/resumen', auth(['profesor', 'alumno']), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id_clase } = req.params
+
+        if (!req.user) throw new AppError('Usuario no autenticado', 401)
+        if (typeof id_clase !== 'string' || !id_clase) {
+            throw new AppError('No se recibió id de clase', 400)
+        }
+
+        const transcripcion = await transcripcionService.generarResumen(id_clase, req.user.rol, req.user.id_rol)
+
+        res.status(200).json({ message: 'Resumen generado', transcripcion })
+    } catch (error) {
+        next(error)
+    }
+})
+
 router.patch('/:id_clase/transcripcion/visibilidad', auth(['profesor']), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id_clase } = req.params
