@@ -50,12 +50,12 @@ model Profesor {
 }
 
 model EstadisticaProfesor {
- id_profesor String   @id
- clasesDictadas Int   @default(0)
- cantidadResenas Int   @default(0)
- promedioResenas Float?
- actualizadoEn DateTime @updatedAt
- profesor        Profesor @relation(fields: [id_profesor], references: [id_profesor], onDelete: Cascade)
+  id_profesor     String   @id
+  clasesDictadas  Int      @default(0)
+  cantidadResenas Int      @default(0)
+  promedioResenas Float?
+  actualizadoEn   DateTime @updatedAt
+  profesor        Profesor @relation(fields: [id_profesor], references: [id_profesor], onDelete: Cascade)
 }
 
 model Disponibilidad {
@@ -97,7 +97,7 @@ model EstadisticaAlumno {
   promedioCalificaciones Float?
   resenasDejadas         Int      @default(0)
   actualizadoEn          DateTime @updatedAt
-  alumno                 Alumno   @relation(fields: [id_alumno], references: [id_alumno])
+  alumno                 Alumno   @relation(fields: [id_alumno], references: [id_alumno], onDelete: Cascade)
 }
 
 model Perfil {
@@ -262,7 +262,7 @@ model SolicitudClase {
 }
 
 model ofertaSolicitud {
-  id_oferta         String         @id @default(uuid())
+  id_oferta         String   @id @default(uuid())
   id_solicitud      String
   id_profesor       String
   id_clase          String?
@@ -274,17 +274,16 @@ model ofertaSolicitud {
   materialNombre    String?
   materialUrl       String?
   estado            String
-  createdAt         DateTime       @default(now())
-  
-  clase             Clase?         @relation(fields: [id_clase], references: [id_clase]) // <-- Ahora es opcional
-  materia           materia        @relation(fields: [id_materia], references: [id_materia])
-  profesor          Profesor       @relation(fields: [id_profesor], references: [id_profesor])
-  solicitud         SolicitudClase @relation(fields: [id_solicitud], references: [id_solicitud])
+  createdAt         DateTime @default(now())
+
+  clase     Clase?         @relation(fields: [id_clase], references: [id_clase]) // <-- Ahora es opcional
+  materia   materia        @relation(fields: [id_materia], references: [id_materia])
+  profesor  Profesor       @relation(fields: [id_profesor], references: [id_profesor])
+  solicitud SolicitudClase @relation(fields: [id_solicitud], references: [id_solicitud])
 
   @@unique([id_solicitud, id_profesor])
   @@index([id_profesor])
 }
-
 
 model solicitudMateria {
   id_solicitud String
@@ -417,13 +416,13 @@ model respuestaQuiz {
 }
 
 model Logro {
-  id_logro     String          @id @default(uuid())
-  nombre       String          @unique
-  descripcion  String
-  condicion    String
+  id_logro       String          @id @default(uuid())
+  nombre         String          @unique
+  descripcion    String
+  condicion      String
   roles_objetivo Role[]
-  objetivo     Int
-  obtenidos    LogroObtenido[]
+  objetivo       Int
+  obtenidos      LogroObtenido[]
 }
 
 model LogroObtenido {
@@ -476,9 +475,13 @@ model tarea {
   id_clase       String
   titulo         String
   descripcion    String?
+  fechaLimite    DateTime?
+  createdAt      DateTime       @default(now())
   asignaciones   TareaAlumno[]
   calificaciones calificacion[]
   clase          Clase          @relation(fields: [id_clase], references: [id_clase])
+
+  @@index([id_clase])
 }
 
 model calificacion {
@@ -512,13 +515,32 @@ model RegistroActividadAlumno {
   @@index([id_clase, id_alumno])
 }
 
+model EntregaArchivo {
+  id_archivo String      @id @default(uuid())
+  id_tarea   String
+  id_alumno  String
+  nombre     String
+  url        String
+  createdAt  DateTime    @default(now())
+  entrega    TareaAlumno @relation(fields: [id_tarea, id_alumno], references: [id_tarea, id_alumno], onDelete: Cascade)
+
+  @@index([id_tarea, id_alumno])
+}
+
 model TareaAlumno {
-  id_tarea  String
-  id_alumno String
-  alumno    Alumno @relation(fields: [id_alumno], references: [id_alumno])
-  tarea     tarea  @relation(fields: [id_tarea], references: [id_tarea])
+  id_tarea     String
+  id_alumno    String
+  entregaTexto String?
+  entregadaEn  DateTime?
+  nota         Float?
+  comentario   String?
+  calificadaEn DateTime?
+  archivos     EntregaArchivo[]
+  alumno       Alumno           @relation(fields: [id_alumno], references: [id_alumno])
+  tarea        tarea            @relation(fields: [id_tarea], references: [id_tarea])
 
   @@id([id_tarea, id_alumno])
+  @@index([id_alumno])
 }
 
 enum Role {
