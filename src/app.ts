@@ -9,6 +9,7 @@ import { AppError } from './utils/error.js'
 import pagoRoutes from './routes/pagoRoutes.js'
 import materialRoutes from './routes/materialRoutes.js'
 import claseHorarioRoutes from './routes/claseHorarioRoutes.js'
+import livekitWebhookRoutes from './routes/livekitWebhookRoutes.js'
 
 const app = express()
 app.set('trust proxy', 1)
@@ -28,6 +29,13 @@ app.use(cors({
   },
   credentials: true
 }))
+
+app.use(
+  '/webhooks/livekit',
+  express.raw({ type: 'application/webhook+json' }),
+  livekitWebhookRoutes
+)
+
 app.use(helmet())
 app.use(express.json())
 app.use(cookieParser())
