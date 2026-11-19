@@ -447,6 +447,7 @@ model materialDidactico {
   url_archivo   String
   tipo_archivo  String?
   fecha_carga   DateTime         @default(now())
+  fecha_modificacion DateTime    @default(now())
   destinatarios materialAlumno[]
   clase         Clase            @relation(fields: [id_clase], references: [id_clase])
   profesor      Profesor         @relation(fields: [id_profesor], references: [id_profesor])
@@ -466,6 +467,7 @@ model materialClase {
 model materialAlumno {
   id_material String
   id_alumno   String
+  descargadoEn DateTime?
   alumno      Alumno            @relation(fields: [id_alumno], references: [id_alumno])
   material    materialDidactico @relation(fields: [id_material], references: [id_material])
 
