@@ -18,6 +18,7 @@ import adminRoutes from './adminRoutes.js'
 import reclamoRoutes from './reclamoRoutes.js'
 import recordatorioRoutes from './recordatorioRoutes.js'
 import reporteRoutes from './reporteRoutes.js';
+import tareasRoutes from './tareaRoutes.js'
 import bibliotecaRoutes from './bibliotecaRoutes.js';
 
 const router = Router()
@@ -42,5 +43,5 @@ router.use('/admin', adminRoutes);
 router.use('/reclamos', reclamoRoutes);
 router.use('/recordatorios', recordatorioRoutes);
 router.use('/reportes', reporteRoutes);
-
+router.use('/tareas', tareasRoutes);
 export default router
