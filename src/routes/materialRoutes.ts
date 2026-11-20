@@ -9,30 +9,56 @@ import { materialService } from '../services/materialService.js'
 
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 1 } })
+const MAX_PDFS_CLASE = 10
+const MAX_PDFS_INICIALES = 3
 
-router.post('/:id/material', auth(['profesor']), upload.single('pdf'), async (req: Request, res: Response) => {
+async function subirPdfClase(req: Request, res: Response, maximo: number, mensajeLimite: string) {
   const idClase = String(req.params.id)
   const clase = await prisma.clase.findUnique({ where: { id_clase: idClase } })
   if (!clase || clase.id_profesor !== obtenerIdRol(req)) throw new AppError('Clase no encontrada', 404)
   const archivo = req.file
   if (!archivo) throw new AppError('Falta el archivo PDF', 400)
 
-  const material = await prisma.$transaction(async (tx) => {
+  const resultado = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${idClase}))`
-    const cantidad = await tx.materialClase.count({ where: { id_clase: idClase } })
-    if (cantidad >= 3) throw new AppError('Cada clase permite hasta 3 archivos PDF', 409)
+    const claseActual = await tx.clase.findUnique({
+      where: { id_clase: idClase },
+      select: { materialUrl: true }
+    })
+    const cantidadRegistrada = await tx.materialClase.count({ where: { id_clase: idClase } })
+    const materialLegadoRegistrado = claseActual?.materialUrl
+      ? await tx.materialClase.findFirst({
+        where: { id_clase: idClase, url: claseActual.materialUrl },
+        select: { id_material: true }
+      })
+      : null
+    const cantidad = cantidadRegistrada + (claseActual?.materialUrl && !materialLegadoRegistrado ? 1 : 0)
+    if (cantidad >= maximo) throw new AppError(mensajeLimite, 409)
 
     const { url, nombre } = await materialService.subirPdf(archivo, idClase)
-    return tx.materialClase.create({
+    const material = await tx.materialClase.create({
       data: { id_clase: idClase, nombre, url }
     })
+    return { material, cantidad: cantidad + 1 }
   }, { maxWait: 10_000, timeout: 60_000 })
 
   await logroService.actualizarSeguro(req.user!)
   res.status(200).json({
-    material: { id_material: material.id_material, url: material.url, nombre: material.nombre },
-    cantidad: await prisma.materialClase.count({ where: { id_clase: idClase } })
+    material: {
+      id_material: resultado.material.id_material,
+      url: resultado.material.url,
+      nombre: resultado.material.nombre
+    },
+    cantidad: resultado.cantidad
   })
+}
+
+router.post('/:id/material-inicial', auth(['profesor']), upload.single('pdf'), async (req: Request, res: Response) => {
+  await subirPdfClase(req, res, MAX_PDFS_INICIALES, 'Al crear una clase se permiten hasta 3 archivos PDF iniciales')
+})
+
+router.post('/:id/material', auth(['profesor']), upload.single('pdf'), async (req: Request, res: Response) => {
+  await subirPdfClase(req, res, MAX_PDFS_CLASE, 'Cada clase permite hasta 10 archivos PDF en total')
 })
 
 router.patch('/:id/material/:id_material', auth(['profesor']), upload.single('pdf'), async (req: Request, res: Response) => {

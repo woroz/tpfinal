@@ -19,8 +19,11 @@ import reclamoRoutes from './reclamoRoutes.js'
 import recordatorioRoutes from './recordatorioRoutes.js'
 import reporteRoutes from './reporteRoutes.js';
 import tareasRoutes from './tareaRoutes.js'
+import bibliotecaRoutes from './bibliotecaRoutes.js';
+
 const router = Router()
 
+router.use('/biblioteca', bibliotecaRoutes);
 router.use('/transcripcion', transcripcion);
 router.use('/actividad-alumno', actividadAlumnoRoutes);
 router.use('/clases', claseRoutes);
