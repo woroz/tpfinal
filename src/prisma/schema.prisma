@@ -482,6 +482,7 @@ model tarea {
   createdAt      DateTime       @default(now())
   asignaciones   TareaAlumno[]
   calificaciones calificacion[]
+  adjuntos     TareaAdjunto[]
   clase          Clase          @relation(fields: [id_clase], references: [id_clase])
 
   @@index([id_clase])
@@ -544,6 +545,17 @@ model TareaAlumno {
 
   @@id([id_tarea, id_alumno])
   @@index([id_alumno])
+}
+
+model TareaAdjunto {
+  id_adjunto String   @id @default(uuid())
+  id_tarea   String
+  nombre     String
+  url        String
+  createdAt  DateTime @default(now())
+  tarea      tarea    @relation(fields: [id_tarea], references: [id_tarea], onDelete: Cascade)
+
+  @@index([id_tarea])
 }
 
 enum Role {

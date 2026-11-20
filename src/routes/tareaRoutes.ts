@@ -111,5 +111,33 @@ router.post('/:id_tarea/entregar', auth(['alumno']), validate(entregarSchema), a
     }
 })
 
+router.post('/:id_tarea/adjuntos', auth(['profesor']), uploadTarea.single('archivo'), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id_tarea } = req.params
+        if (typeof id_tarea !== 'string' || !id_tarea) throw new AppError('Falta el id de la tarea', 400)
+        if (!req.user?.id_rol) throw new AppError('Profesor no identificado', 403)
+        if (!req.file) throw new AppError('Falta el archivo', 400)
+
+        const adjunto = await tareaService.subirAdjunto(id_tarea, req.user.id_rol, req.file)
+        res.status(201).json({ message: 'Archivo adjuntado', adjunto })
+    } catch (error) {
+        next(error)
+    }
+})
+
+router.delete('/:id_tarea/adjuntos/:id_adjunto', auth(['profesor']), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id_tarea, id_adjunto } = req.params
+        if (typeof id_tarea !== 'string' || !id_tarea) throw new AppError('Falta el id de la tarea', 400)
+        if (typeof id_adjunto !== 'string' || !id_adjunto) throw new AppError('Falta el id del archivo', 400)
+        if (!req.user?.id_rol) throw new AppError('Profesor no identificado', 403)
+
+        await tareaService.quitarAdjunto(id_tarea, req.user.id_rol, id_adjunto)
+        res.status(200).json({ message: 'Archivo eliminado' })
+    } catch (error) {
+        next(error)
+    }
+})
+
 
 export default router;

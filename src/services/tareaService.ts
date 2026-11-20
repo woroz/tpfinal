@@ -82,6 +82,13 @@ export const tareaService = {
                         titulo: true,
                         descripcion: true,
                         fechaLimite: true,
+                        adjuntos: {
+                            select: {
+                                id_adjunto: true,
+                                nombre: true,
+                                url: true
+                            }
+                        },
                         clase: {
                             select: {
                                 id_clase: true,
@@ -111,7 +118,19 @@ export const tareaService = {
                     calificadaEn: true,
                     archivos: { select: { id_archivo: true, nombre: true, url: true } },
                     tarea: {
-                        select: { id_tarea: true, titulo: true, descripcion: true, fechaLimite: true }
+                        select: {
+                            id_tarea: true,
+                            titulo: true,
+                            descripcion: true,
+                            fechaLimite: true,
+                            adjuntos: { 
+                                select: { 
+                                    id_adjunto: true,
+                                    nombre: true,
+                                    url: true
+                                } }
+                        }
+
                     }
                 }
             })
@@ -136,6 +155,13 @@ export const tareaService = {
                 descripcion: true,
                 fechaLimite: true,
                 createdAt: true,
+                adjuntos: {
+                    select: {
+                        id_adjunto: true,
+                        nombre: true,
+                        url: true
+                    }
+                },
                 asignaciones: {
                     select: {
                         id_alumno: true,
@@ -253,6 +279,41 @@ export const tareaService = {
             data: { entregaTexto: data.entregaTexto, entregadaEn: new Date() }
         })
         if (entregada.count === 0) throw new AppError('La tarea no existe o ya fue calificada', 404)
+        return { ok: true }
+    },
+    async subirAdjunto(id_tarea: string, id_profesor: string, file: Express.Multer.File) {
+        const tarea = await prisma.tarea.findFirst({
+            where: { id_tarea, clase: { id_profesor } },
+            select: { _count: { select: { adjuntos: true } } }
+        })
+        if (!tarea) throw new AppError('La tarea no existe o no es tuya', 404)
+        if (tarea._count.adjuntos >= 3) throw new AppError('Podés adjuntar hasta 3 archivos', 400)
+
+        const blob = await put(
+            `tareas/${id_tarea}/consigna/${Date.now()}-${file.originalname}`,
+            file.buffer,
+            { access: 'public', contentType: file.mimetype }
+        )
+
+        try {
+            return await prisma.tareaAdjunto.create({
+                data: { id_tarea, nombre: file.originalname, url: blob.url }
+            })
+        } catch (error) {
+            await del(blob.url).catch(() => { })
+            throw error
+        }
+    },
+
+    async quitarAdjunto(id_tarea: string, id_profesor: string, id_adjunto: string) {
+        const adjunto = await prisma.tareaAdjunto.findFirst({
+            where: { id_adjunto, id_tarea, tarea: { clase: { id_profesor } } },
+            select: { url: true }
+        })
+        if (!adjunto) throw new AppError('El archivo no existe o no es tuyo', 404)
+
+        await prisma.tareaAdjunto.delete({ where: { id_adjunto } })
+        await del(adjunto.url).catch(() => { })
         return { ok: true }
     }
 }
