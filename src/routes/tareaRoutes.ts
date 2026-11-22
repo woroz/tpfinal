@@ -29,6 +29,16 @@ router.get('/misTareas', auth(['alumno']), async (req: Request, res: Response, n
     }
 })
 
+router.get('/ultima-tarea', auth(['alumno']), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        if (!req.user?.id_rol) throw new AppError('Alumno no identificado', 403)
+        const tarea = await tareaService.listarUltimaClase(req.user.id_rol)
+        res.status(200).json({ message: 'Ultima tarea obtenida', tarea })      
+    } catch (error) {
+        next(error)
+    }
+})
+
 router.get('/clase/:id_clase', auth(['profesor', "alumno"]), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id_clase } = req.params
@@ -138,6 +148,5 @@ router.delete('/:id_tarea/adjuntos/:id_adjunto', auth(['profesor']), async (req:
         next(error)
     }
 })
-
 
 export default router;

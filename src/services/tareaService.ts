@@ -315,5 +315,65 @@ export const tareaService = {
         await prisma.tareaAdjunto.delete({ where: { id_adjunto } })
         await del(adjunto.url).catch(() => { })
         return { ok: true }
+    },
+    
+    async listarUltimaClase(id_alumno: string) {
+        const inscripcion = await prisma.inscripcion.findFirst({
+            where: {
+                id_alumno,
+                estado: 'confirmada',
+                clase: {
+                    fecha_hora_inicio: { lte: new Date() },
+                    estado: { not: 'cancelada'}
+                }
+            },
+            orderBy: { clase: { fecha_hora_inicio: 'desc' } },
+            select: {
+                clase: {
+                    select: {
+                        id_clase: true,
+                        titulo: true,
+                        fecha_hora_inicio: true,
+                        profesor: {
+                            select: {
+                                usuario: { select: { nombre: true } }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+        const generadoEn = new Date()
+        if (!inscripcion) return { clase: null, tareas: [], generadoEn }
+
+        const tareas = await prisma.tareaAlumno.findMany({
+            where: { id_alumno, tarea: { id_clase: inscripcion.clase.id_clase } },
+            orderBy: { tarea: { createdAt: 'desc' } },
+            select: {
+                entregaTexto: true,
+                entregadaEn: true,
+                nota: true,
+                comentario: true,
+                calificadaEn: true,
+                archivos: { select: { id_archivo: true, nombre: true, url: true } },
+                tarea: {
+                    select: {
+                        id_tarea: true,
+                        titulo: true,
+                        descripcion: true,
+                        fechaLimite: true,
+                        adjuntos: { select: { id_adjunto: true, nombre: true, url: true } }
+                    }
+                }
+            }
+        })
+        return {
+            clase: inscripcion.clase,
+            generadoEn,
+            tareas: tareas.map((tarea) => ({
+                ...tarea,
+                estado: tarea.nota !== null ? 'calificada' : tarea.entregadaEn ? 'entregada' : 'sin_entregar'
+            }))
+        }
     }
 }
