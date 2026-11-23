@@ -57,6 +57,16 @@ export const adminService = {
                     bloqueado: true,
                     createdAt: true,
 
+                    perfil: {
+                        select: {
+                        biografia: true,
+                        avatarURL: true,
+                        ciudad: true,
+                        provincia: true,
+                        pais: true
+                        }
+                    },
+
                     alumno: {
                         select: {
                             id_alumno: true,
@@ -68,7 +78,22 @@ export const adminService = {
                         select: {
                             id_profesor: true,
                             tarifa: true,
-                            descripcion: true
+                            descripcion: true,
+                            materias: {
+                                select: {
+                                    materia: {
+                                        select: {
+                                            id_materia: true,
+                                            nombreMateria: true,
+                                            areaConocimiento: {
+                                                select: {
+                                                    nombreArea: true
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -86,6 +111,51 @@ export const adminService = {
                 totalPaginas: Math.ceil(total / limite)
             }
         };
+    },
+
+    obtenerClases: async () => {
+        const clases = await prisma.clase.findMany({
+            orderBy: {
+                fecha_hora_inicio: 'desc'
+            },
+            include: {
+                profesor: {
+                    include: {
+                        usuario: {
+                            select: {
+                                id_usuario: true,
+                                nombre: true,
+                                email: true
+                            }
+                        }
+                    }
+                },
+                materia: {
+                    select: {
+                        id_materia: true,
+                        nombreMateria: true
+                    }
+                },
+                inscripciones: {
+                    include: {
+                        alumno: {
+                            include: {
+                                usuario: {
+                                    select: {
+                                        id_usuario: true,
+                                        nombre: true,
+                                        email: true
+                                    }
+                                }
+                            }
+                        },
+                        pago: true
+                    }
+                }
+            }
+        });
+
+        return clases;
     },
 
     obtenerEstadisticas: async () => {
@@ -135,6 +205,36 @@ export const adminService = {
         });
 
         return reportes;
+    },
+
+        actualizarEstadoReporte: async (
+        idReporte: string,
+        estado: string
+    ) => {
+        const estadosValidos = ['pendiente', 'aceptado', 'rechazado'];
+
+        if (!estadosValidos.includes(estado)) {
+            throw new AppError('Estado de reporte inválido', 400);
+        }
+
+        const reporte = await prisma.reporte.findUnique({
+            where: { id_reporte: idReporte }
+        });
+
+        if (!reporte) {
+            throw new AppError('Reporte no encontrado', 404);
+        }
+
+        const reporteActualizado = await prisma.reporte.update({
+            where: { id_reporte: idReporte },
+            data: {
+                estado,
+                fecha_resolucion:
+                    estado === 'pendiente' ? null : new Date()
+            }
+        });
+
+        return reporteActualizado;
     },
 
     cambiarEstadoBloqueoProfesor: async (

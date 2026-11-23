@@ -53,6 +53,24 @@ router.get('/usuarios', auth(['admin']), async (
     }
 });
 
+router.get('/clases', auth(['admin']), async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const clases = await adminService.obtenerClases();
+
+        res.status(200).json({
+            message: 'Clases obtenidas correctamente',
+            clases
+        });
+
+    } catch (error) {
+        next(error);
+    }
+});
+
 router.get('/estadisticas', auth(['admin']), async (
     req: Request,
     res: Response,
@@ -84,6 +102,30 @@ router.get('/reportes', auth(['admin']), async (
             reportes
         });
 
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.patch('/reportes/:id/estado', auth(['admin']), async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const id = req.params.id;
+        if (typeof id !== 'string') {
+            throw new AppError('ID de reporte inválido', 400);
+        }
+        const { estado } = req.body;
+        const reporte = await adminService.actualizarEstadoReporte(
+            id,
+            estado
+        );
+        res.status(200).json({
+            message: 'Estado del reporte actualizado correctamente',
+            reporte
+        });
     } catch (error) {
         next(error);
     }
