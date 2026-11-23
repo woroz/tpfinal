@@ -20,6 +20,7 @@ import recordatorioRoutes from './recordatorioRoutes.js'
 import reporteRoutes from './reporteRoutes.js';
 import tareasRoutes from './tareaRoutes.js'
 import bibliotecaRoutes from './bibliotecaRoutes.js';
+import quizRoutes from './quizRoutes.js'
 
 const router = Router()
 
@@ -44,4 +45,5 @@ router.use('/reclamos', reclamoRoutes);
 router.use('/recordatorios', recordatorioRoutes);
 router.use('/reportes', reporteRoutes);
 router.use('/tareas', tareasRoutes);
+router.use('/quizzes', quizRoutes);
 export default router
