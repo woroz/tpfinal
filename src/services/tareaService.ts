@@ -12,7 +12,7 @@ export const tareaService = {
     }) {
         const clase = await prisma.clase.findFirst({
             where: { id_clase: data.id_clase, id_profesor },
-            select: { id_clase: true }
+            select: { id_clase: true, titulo: true }
         })
         if (!clase) throw new AppError('La clase no existe o no es tuya', 403)
 
@@ -25,7 +25,8 @@ export const tareaService = {
                 estado: 'confirmada'
             },
             select: {
-                id_alumno: true
+                id_alumno: true,
+                alumno: { select: { id_usuario: true } }
             }
         })
         if (inscriptos.length !== ids.length) {
@@ -38,6 +39,9 @@ export const tareaService = {
         }
 
         return prisma.$transaction(async (tx) => {
+            await tx.$queryRaw`SELECT id_clase FROM "Clase" WHERE id_clase = ${data.id_clase} FOR UPDATE`
+            const existente = await tx.tarea.findFirst({ where: { id_clase: data.id_clase }, select: { id_tarea: true } })
+            if (existente) throw new AppError('Esta clase ya tiene una tarea asignada', 409)
             const tarea = await tx.tarea.create({
                 data: {
                     id_clase: data.id_clase,
@@ -50,6 +54,15 @@ export const tareaService = {
                 data: ids.map((id_alumno) => ({
                     id_tarea: tarea.id_tarea,
                     id_alumno: id_alumno
+                }))
+            })
+            await tx.notificacion.createMany({
+                data: inscriptos.map((inscripcion) => ({
+                    id_usuario: inscripcion.alumno.id_usuario,
+                    id_clase: data.id_clase,
+                    tipo: 'tarea_nueva',
+                    titulo: 'Nueva tarea asignada',
+                    mensaje: `Tenés una nueva tarea en "${clase.titulo}": ${tarea.titulo}.`
                 }))
             })
             return tarea
@@ -274,12 +287,43 @@ export const tareaService = {
             if (archivos === 0) throw new AppError('Escribí una respuesta o adjuntá un archivo', 400)
         }
 
-        const entregada = await prisma.tareaAlumno.updateMany({
-            where: { id_tarea, id_alumno, nota: null },
-            data: { entregaTexto: data.entregaTexto, entregadaEn: new Date() }
+        return prisma.$transaction(async (tx) => {
+            const entrega = await tx.tareaAlumno.findUnique({
+                where: { id_tarea_id_alumno: { id_tarea, id_alumno } },
+                select: {
+                    alumno: { select: { usuario: { select: { nombre: true } } } },
+                    tarea: { select: {
+                        titulo: true,
+                        id_clase: true,
+                        clase: { select: { titulo: true, profesor: { select: { usuario: { select: { id_usuario: true } } } } } }
+                    } }
+                }
+            })
+            if (!entrega) throw new AppError('La tarea no existe o ya fue calificada', 404)
+            const datosEntrega = { entregaTexto: data.entregaTexto, entregadaEn: new Date() }
+            const primera = await tx.tareaAlumno.updateMany({
+                where: { id_tarea, id_alumno, nota: null, entregadaEn: null },
+                data: datosEntrega
+            })
+            if (primera.count === 0) {
+                const actualizada = await tx.tareaAlumno.updateMany({
+                    where: { id_tarea, id_alumno, nota: null },
+                    data: datosEntrega
+                })
+                if (actualizada.count === 0) throw new AppError('La tarea no existe o ya fue calificada', 404)
+            } else {
+                await tx.notificacion.create({
+                    data: {
+                        id_usuario: entrega.tarea.clase.profesor.usuario.id_usuario,
+                        id_clase: entrega.tarea.id_clase,
+                        tipo: 'tarea_entregada',
+                        titulo: 'Nueva tarea entregada',
+                        mensaje: `${entrega.alumno.usuario.nombre} entregó "${entrega.tarea.titulo}" en "${entrega.tarea.clase.titulo}".`
+                    }
+                })
+            }
+            return { ok: true }
         })
-        if (entregada.count === 0) throw new AppError('La tarea no existe o ya fue calificada', 404)
-        return { ok: true }
     },
     async subirAdjunto(id_tarea: string, id_profesor: string, file: Express.Multer.File) {
         const tarea = await prisma.tarea.findFirst({
