@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { auth } from '../middlewares/authMiddleware.js';
 import { validate } from '../middlewares/validateMiddleware.js';
 import { crearMateriaSchema } from '../schemas/materiaSchema.js';
+import { temasDeMateria } from '../schemas/tablonSchema.js';
 import { materiaService } from '../services/materiaService.js';
 import { AppError } from '../utils/error.js';
 
@@ -13,7 +14,10 @@ router.get('/', auth(['profesor', 'alumno', 'admin']), async (req: Request, res:
         const materias = await materiaService.listar({
             id_area: id_area as string | undefined
         });
-        res.status(200).json({ message: 'Materias listadas: ', total: materias.length, materias });
+        res.status(200).json({
+            message: 'Materias listadas: ', total: materias.length,
+            materias: materias.map(materia => ({ ...materia, temas: temasDeMateria(materia.nombreMateria) })),
+        });
     } catch (error) { next(error); }
 });
 

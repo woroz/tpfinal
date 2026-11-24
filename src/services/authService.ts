@@ -108,9 +108,10 @@ export const authService = {
     login: async (email: string, password: string) => {
         const user = await prisma.usuario.findUnique({
             where: { email },
-            include: {
-                profesor: true,
-                alumno: true
+            select: {
+                id_usuario: true, email: true, nombre: true, rol: true, contrasena: true,
+                profesor: { select: { id_profesor: true } },
+                alumno: { select: { id_alumno: true } }
             }
         })
         if (!user) throw new AppError('Credenciales invalidas', 401)
