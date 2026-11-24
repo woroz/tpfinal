@@ -1,7 +1,7 @@
 import { prisma } from "../utils/prisma.js";
 import { AppError } from "../utils/error.js";
 import { claseOcupaHorario } from '../utils/ocupacion.js'
-import { ESTADO_CLASE, ESTADO_INSCRIPCION } from '../utils/estados.js'
+import { ESTADO_CLASE, ESTADO_INSCRIPCION, ESTADO_PAGO } from '../utils/estados.js'
 import { config } from '../config/index.js'
 
 const limiteVigencia = () => new Date(Date.now() - DIAS_VIGENCIA * 24 * 60 * 60 * 1000)
@@ -54,7 +54,7 @@ export const tablonService = {
                 solicitudMateria: {
                     select: { materia: { select: { id_materia: true, nombreMateria: true } } },
                 },
-                ofertas: { where: { id_profesor }, select: { id_oferta: true } },
+                ofertas: { where: { id_profesor }, select: { estado: true } },
             },
         })
 
@@ -62,6 +62,7 @@ export const tablonService = {
             ...resto,
             nombreAlumno: alumno.usuario.nombre,
             yaOfreciste: ofertas.length > 0,
+            estadoMiOferta: ofertas[0]?.estado ?? null,
         }))
     },
 
@@ -103,9 +104,15 @@ export const tablonService = {
             fecha_hora_inicio: { lt: datos.fecha_hora_fin },
             fecha_hora_fin: { gt: datos.fecha_hora_inicio },
         },
-        select: { id_clase: true },
+        select: { titulo: true, estado: true, fecha_hora_inicio: true, fecha_hora_fin: true },
     })
-    if (horarioClase) throw new AppError('Ya tenés una clase en ese horario', 409)
+    if (horarioClase) {
+        const formato = new Intl.DateTimeFormat('es-AR', {
+            timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'short', timeStyle: 'short'
+        })
+        const motivo = horarioClase.estado === ESTADO_CLASE.pendiente ? 'una reserva pendiente de pago' : 'la clase'
+        throw new AppError(`El horario se superpone con ${motivo} «${horarioClase.titulo}» (${formato.formatRange(horarioClase.fecha_hora_inicio, horarioClase.fecha_hora_fin)}, hora argentina).`, 409)
+    }
 
     try {
         return await prisma.ofertaSolicitud.create({
@@ -252,6 +259,17 @@ export const tablonService = {
         })
     },
 
+    async rechazarOferta(id_solicitud: string, id_oferta: string, id_alumno: string) {
+        const resultado = await prisma.ofertaSolicitud.updateMany({
+            where: {
+                id_oferta, id_solicitud, estado: 'pendiente',
+                solicitud: { id_alumno, estado: 'abierta', createdAt: { gte: limiteVigencia() } }
+            },
+            data: { estado: 'rechazada' }
+        })
+        if (!resultado.count) throw new AppError('La oferta ya no está disponible para rechazar.', 409)
+    },
+
     async aceptarOferta(id_solicitud: string, id_oferta: string, id_alumno: string) {
     return await prisma.$transaction(async (tx) => {
         
@@ -265,6 +283,12 @@ export const tablonService = {
         })
         if (!oferta) throw new AppError('Oferta no encontrada o no disponible', 404)
 
+        const tomada = await tx.solicitudClase.updateMany({
+            where: { id_solicitud, id_alumno, estado: 'abierta' },
+            data: { estado: 'cerrada' }
+        })
+        if (!tomada.count) throw new AppError('La solicitud ya no está abierta', 409)
+        const gratis = oferta.precio === 0
         const clase = await tx.clase.create({
             data: {
                 id_profesor: oferta.id_profesor,
@@ -277,7 +301,7 @@ export const tablonService = {
                 fecha_hora_fin: oferta.fecha_hora_fin,
                 tipo: 'individual',
                 origen: 'solicitud', 
-                estado: ESTADO_CLASE.pendiente
+                estado: gratis ? ESTADO_CLASE.confirmada : ESTADO_CLASE.pendiente
             }
         })
 
@@ -292,31 +316,33 @@ export const tablonService = {
         }
 
         const retencionMin = config.reservas.retencionMin
-        const expiraEn = new Date(Date.now() + retencionMin * 60 * 1000)
+        const expiraEn = gratis ? null : new Date(Date.now() + retencionMin * 60 * 1000)
 
-        await tx.inscripcion.create({
+        const inscripcion = await tx.inscripcion.create({
             data: {
                 id_clase: clase.id_clase,
                 id_alumno: id_alumno,
-                estado: ESTADO_INSCRIPCION.pendientePago,
+                estado: gratis ? ESTADO_INSCRIPCION.confirmada : ESTADO_INSCRIPCION.pendientePago,
                 expiraEn: expiraEn
             }
         })
+        if (!gratis) {
+            await tx.pago.create({
+                data: { id_inscripcion: inscripcion.id_inscripcion, monto: oferta.precio,
+                    medioPago: 'mercadopago', estado: ESTADO_PAGO.pendiente }
+            })
+        }
         
-        await tx.ofertaSolicitud.update({
-            where: { id_oferta },
+        const aceptada = await tx.ofertaSolicitud.updateMany({
+            where: { id_oferta, estado: 'pendiente' },
             data: { estado: 'aceptada', id_clase: clase.id_clase }
         })
+        if (!aceptada.count) throw new AppError('La oferta ya no está disponible para aceptar.', 409)
         await tx.ofertaSolicitud.updateMany({
             where: { id_solicitud, id_oferta: { not: id_oferta } },
             data: { estado: 'rechazada' }
         })
-        await tx.solicitudClase.update({
-            where: { id_solicitud },
-            data: { estado: 'cerrada' }
-        })
-
-        return clase.id_clase
+        return { id_clase: clase.id_clase, id_inscripcion: inscripcion.id_inscripcion, requierePago: !gratis }
     })
 }
 }

@@ -30,7 +30,9 @@ router.post('/register', validate(registerSchema), async (req: Request, res: Res
  
 router.post('/login', validate(loginSchema), async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const inicio = performance.now()
         const { token, refreshToken } = await authService.login(req.body.email, req.body.password)
+        res.setHeader('Server-Timing', `auth;dur=${(performance.now() - inicio).toFixed(1)}`)
         res.cookie('refreshToken', refreshToken, {
             ...cookieOptions,
             maxAge: REFRESH_MAX_AGE
@@ -63,4 +65,3 @@ router.post('/refresh-token', async (req: Request, res: Response, next: NextFunc
 })
  
 export default router
- 

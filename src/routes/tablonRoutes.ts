@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { auth } from '../middlewares/authMiddleware.js'
 import { AppError } from '../utils/error.js'
-import { solicitudSchema, ofertaSchema, editarSolicitudSchema} from '../schemas/tablonSchema.js'
+import { solicitudSchema, ofertaSchema, editarSolicitudSchema, temasTablon } from '../schemas/tablonSchema.js'
 import { validate } from "../middlewares/validateMiddleware.js";
 import { tablonService } from '../services/tablonService.js'
 import { upload } from '../utils/multer.js'
@@ -122,7 +122,7 @@ router.get('/solicitudes/mias', auth(['alumno']), async (req: Request, res: Resp
     try {
         if (!req.user?.id_rol) throw new AppError('Alumno no identificado', 403)
         const solicitudes = await tablonService.obtenerSolicitudesAlumno(req.user.id_rol)
-        res.status(200).json({ message: "Solicitudes obtenidas: ", solicitudes })
+        res.status(200).json({ message: "Solicitudes obtenidas: ", solicitudes, temas: temasTablon })
     } catch (error) {
         next(error)
     }
@@ -148,10 +148,20 @@ router.patch('/solicitudes/:id/ofertas/:id_oferta/aceptar', auth(['alumno']), as
         if (typeof id_oferta !== 'string' || !id_oferta) throw new AppError('Falta el id de la oferta', 400)
         if (!req.user?.id_rol) throw new AppError('Alumno no identificado', 403)
 
-        const id_clase = await tablonService.aceptarOferta(id, id_oferta, req.user.id_rol)
-        res.status(200).json({ message: 'Oferta aceptada', id_clase })
+        const reserva = await tablonService.aceptarOferta(id, id_oferta, req.user.id_rol)
+        res.status(200).json({ message: 'Oferta aceptada', ...reserva })
     } catch (error) {
         next(error)
     }
 })
+router.patch('/solicitudes/:id/ofertas/:id_oferta/rechazar', auth(['alumno']), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id, id_oferta } = req.params
+        if (typeof id !== 'string' || typeof id_oferta !== 'string') throw new AppError('Solicitud u oferta inválida', 400)
+        if (!req.user?.id_rol) throw new AppError('Alumno no identificado', 403)
+        await tablonService.rechazarOferta(id, id_oferta, req.user.id_rol)
+        res.status(200).json({ message: 'Oferta rechazada', id_oferta, estado: 'rechazada' })
+    } catch (error) { next(error) }
+})
+
 export default router
